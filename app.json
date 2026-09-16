@@ -13,17 +13,40 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tiyende.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Tiyende uses your location to find nearby drivers and calculate fares.",
+        "NSCameraUsageDescription": "Tiyende uses the camera for data calls between passengers and drivers.",
+        "NSMicrophoneUsageDescription": "Tiyende uses the microphone for data calls between passengers and drivers.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.tiyende.app",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#16A34A"
       },
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "67776b19-f850-4fcc-b811-368b045d005b"
+      }
+    },
+    "owner": "fracksonnjekwa"
   }
 }
