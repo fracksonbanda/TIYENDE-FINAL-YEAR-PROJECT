@@ -23,7 +23,7 @@ export default function DiscountsScreen() {
 
   useEffect(() => {
     if (!uid) return;
-    return watchDiscounts(uid, setDiscounts, () => {});
+    return watchDiscounts(uid, setDiscounts, (error) => Alert.alert('Discounts', error.message));
   }, [uid]);
 
   const handleSave = async () => {

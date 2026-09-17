@@ -6,16 +6,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import * as Notifications from 'expo-notifications';
 import { auth, db } from '../../firebase';
 import { colors, shadows, radius } from '../../theme';
+import { useAppContext } from '../../context/AppContext';
 import useUserProfile from '../../hooks/useUserProfile';
 import ProfilePhotoButton from '../../components/ProfilePhotoButton';
 import { pickAndUploadProfileImage, saveUserProfile } from '../../services/profileService';
+import { watchDriverCompletedRequests } from '../../services/requestService';
 
 export default function DriverSettings() {
   const { profile } = useUserProfile();
+  const { notifications, setNotifications } = useAppContext();
+  const [completedCount, setCompletedCount] = useState(0);
   const [autoAccept, setAutoAccept] = useState(false);
-  const [notifications, setNotifications] = useState(true);
   const [showEarnings, setShowEarnings] = useState(true);
   const [destinationFilter, setDestinationFilter] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -34,6 +38,17 @@ export default function DriverSettings() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return undefined;
+    return watchDriverCompletedRequests(user.uid, (items) => setCompletedCount(items.length), () => {});
+  }, []);
+
+  const handleNotificationsToggle = async (value) => {
+    setNotifications(value);
+    if (value) await Notifications.requestPermissionsAsync().catch(() => {});
+  };
 
   useEffect(() => {
     if (!profile) return;
@@ -96,7 +111,7 @@ export default function DriverSettings() {
       items: [
         { icon: 'person-outline', label: fullName || 'Driver profile', sub: 'Driver account', type: 'action', onPress: () => setShowEditProfile(true) },
         { icon: 'car-outline', label: vehicleModel || 'Vehicle details', sub: licensePlate || 'Add license plate', type: 'action', onPress: () => setShowEditProfile(true) },
-        { icon: 'star-outline', label: 'Rating: 4.9', sub: '84 trips completed', type: 'info' },
+        { icon: 'star-outline', label: `Rating: ${profile?.rating || 5}`, sub: `${completedCount} trip${completedCount === 1 ? '' : 's'} completed`, type: 'info' },
       ],
     },
     {
@@ -110,7 +125,7 @@ export default function DriverSettings() {
     {
       title: 'NOTIFICATIONS',
       items: [
-        { icon: 'notifications-outline', label: 'Ride request alerts', sub: 'Sound & vibration', type: 'switch', value: notifications, onChange: setNotifications },
+        { icon: 'notifications-outline', label: 'Ride request alerts', sub: 'Sound & vibration', type: 'switch', value: notifications, onChange: handleNotificationsToggle },
         { icon: 'cash-outline', label: 'Show earnings on dashboard', type: 'switch', value: showEarnings, onChange: setShowEarnings },
       ],
     },

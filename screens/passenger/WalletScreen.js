@@ -6,21 +6,22 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows, radius } from '../../theme';
 import { useAppContext } from '../../context/AppContext';
+import { auth } from '../../firebase';
+import { linkWalletCard, sendWalletMoney, topUpWallet, watchWallet, watchWalletTransactions } from '../../services/walletService';
 
-const INITIAL_TXS = [
-  { id: '1', type: 'Top-up',              amount:  200, date: '3 May 2026',   icon: 'arrow-down-circle', positive: true  },
-  { id: '2', type: 'Ride to East Park',   amount:  -56, date: '2 May 2026',   icon: 'car-sport',         positive: false },
-  { id: '3', type: 'Top-up',              amount:  100, date: '29 Apr 2026',  icon: 'arrow-down-circle', positive: true  },
-  { id: '4', type: 'Ride to Manda Hill',  amount:  -35, date: '27 Apr 2026',  icon: 'car-sport',         positive: false },
-  { id: '5', type: 'Delivery — Cairo Rd', amount:  -25, date: '25 Apr 2026',  icon: 'bicycle',           positive: false },
-];
-const INIT_BALANCE   = 184;
 const TOP_UP_AMOUNTS = ['50', '100', '200', '500'];
+
+function formatTxDate(timestamp) {
+  const date = timestamp?.toDate?.();
+  if (!date) return 'Today';
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function WalletScreen() {
   const { darkMode } = useAppContext();
-  const [balance,      setBalance]      = useState(INIT_BALANCE);
-  const [transactions, setTransactions] = useState(INITIAL_TXS);
+  const [balance,      setBalance]      = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [busy,          setBusy]        = useState(false);
   const [showTopUp,    setShowTopUp]    = useState(false);
   const [topUpAmount,  setTopUpAmount]  = useState('100');
   const [showSend,     setShowSend]     = useState(false);
@@ -42,6 +43,19 @@ export default function WalletScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }).start();
   }, []);
 
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return undefined;
+    const offWallet = watchWallet(user.uid, (wallet) => {
+      setBalance(wallet.balance || 0);
+      setLinkedCards(wallet.linkedCards || []);
+    }, () => {});
+    const offTx = watchWalletTransactions(user.uid, (items) => {
+      setTransactions(items.map((t) => ({ ...t, date: formatTxDate(t.createdAt) })));
+    }, () => {});
+    return () => { offWallet?.(); offTx?.(); };
+  }, []);
+
   const animateBalance = () => {
     Animated.sequence([
       Animated.spring(balAnim, { toValue: 1.1, tension: 120, friction: 6, useNativeDriver: true }),
@@ -49,30 +63,42 @@ export default function WalletScreen() {
     ]).start();
   };
 
-  const doTopUp = () => {
+  const doTopUp = async () => {
     const amt = parseInt(topUpAmount, 10);
     if (!amt || amt <= 0) { Alert.alert('Invalid amount'); return; }
     Keyboard.dismiss();
-    setBalance((b) => b + amt);
-    setTransactions((t) => [{ id: Date.now().toString(), type: 'Top-up', amount: amt, date: 'Today', icon: 'arrow-down-circle', positive: true }, ...t]);
-    animateBalance();
-    setShowTopUp(false);
-    Alert.alert('Top Up Successful', `ZK ${amt} has been added to your wallet.`);
+    setBusy(true);
+    try {
+      await topUpWallet(auth.currentUser.uid, amt);
+      animateBalance();
+      setShowTopUp(false);
+      Alert.alert('Top Up Successful', `ZK ${amt} has been added to your wallet.`);
+    } catch (error) {
+      Alert.alert('Top Up Failed', error.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const doSend = () => {
+  const doSend = async () => {
     const amt = parseInt(sendAmount, 10);
     if (!sendPhone)      { Alert.alert('Enter phone number'); return; }
     if (!amt || amt <= 0){ Alert.alert('Enter a valid amount'); return; }
     if (amt > balance)   { Alert.alert('Insufficient Balance', `Your balance is ZK ${balance}`); return; }
     Keyboard.dismiss();
-    setBalance((b) => b - amt);
-    setTransactions((t) => [{ id: Date.now().toString(), type: `Sent to ${sendPhone}`, amount: -amt, date: 'Today', icon: 'send', positive: false }, ...t]);
-    animateBalance();
-    setShowSend(false);
-    setSendPhone('');
-    setSendAmount('');
-    Alert.alert('Sent!', `ZK ${amt} has been sent to ${sendPhone}`);
+    setBusy(true);
+    try {
+      await sendWalletMoney(auth.currentUser.uid, amt, sendPhone);
+      animateBalance();
+      setShowSend(false);
+      setSendPhone('');
+      setSendAmount('');
+      Alert.alert('Sent!', `ZK ${amt} has been sent to ${sendPhone}`);
+    } catch (error) {
+      Alert.alert('Send Failed', error.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const ACTIONS = [
@@ -183,8 +209,8 @@ export default function WalletScreen() {
                 onSubmitEditing={doTopUp}
               />
             </View>
-            <TouchableOpacity style={styles.sheetBtn} onPress={doTopUp}>
-              <Text style={styles.sheetBtnText}>Add ZK {topUpAmount || '0'}</Text>
+            <TouchableOpacity style={[styles.sheetBtn, busy && { opacity: 0.65 }]} onPress={doTopUp} disabled={busy}>
+              <Text style={styles.sheetBtnText}>{busy ? 'Adding…' : `Add ZK ${topUpAmount || '0'}`}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.sheetCancelBtn} onPress={() => setShowTopUp(false)}>
               <Text style={[styles.sheetCancelText, { color: subText }]}>Cancel</Text>
@@ -225,8 +251,8 @@ export default function WalletScreen() {
               />
             </View>
             <Text style={[styles.balanceHint, { color: subText }]}>Available: ZK {balance}</Text>
-            <TouchableOpacity style={styles.sheetBtn} onPress={doSend}>
-              <Text style={styles.sheetBtnText}>Send ZK {sendAmount || '0'}</Text>
+            <TouchableOpacity style={[styles.sheetBtn, busy && { opacity: 0.65 }]} onPress={doSend} disabled={busy}>
+              <Text style={styles.sheetBtnText}>{busy ? 'Sending…' : `Send ZK ${sendAmount || '0'}`}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.sheetCancelBtn} onPress={() => setShowSend(false)}>
               <Text style={[styles.sheetCancelText, { color: subText }]}>Cancel</Text>
@@ -251,10 +277,14 @@ export default function WalletScreen() {
               <TouchableOpacity
                 key={card}
                 style={[styles.cardOption, { backgroundColor: inputBg }]}
-                onPress={() => {
-                  if (!linkedCards.includes(card)) setLinkedCards((c) => [...c, card]);
+                onPress={async () => {
                   setShowAddCard(false);
-                  Alert.alert('Card Linked', `${card} has been added to your wallet.`);
+                  try {
+                    await linkWalletCard(auth.currentUser.uid, card);
+                    Alert.alert('Card Linked', `${card} has been added to your wallet.`);
+                  } catch (error) {
+                    Alert.alert('Link Failed', error.message);
+                  }
                 }}
               >
                 <View style={styles.cardOptionIcon}>

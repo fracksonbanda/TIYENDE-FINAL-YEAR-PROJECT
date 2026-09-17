@@ -4,8 +4,11 @@ import {
   Animated, StatusBar, ScrollView, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as SMS from 'expo-sms';
 import { colors, shadows, radius } from '../../theme';
 import { useAppContext } from '../../context/AppContext';
+
+const EMERGENCY_CONTACT = '+260 97 700 0000';
 
 export default function SafetyScreen() {
   const { darkMode } = useAppContext();
@@ -38,8 +41,16 @@ export default function SafetyScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send SOS Now', style: 'destructive',
-          onPress: () => {
-            Alert.alert('SOS Sent', '✅ Emergency alert sent to +260 97 700 0000\nZambia Police: 991');
+          onPress: async () => {
+            const msg = 'SOS: I need help. This is an emergency alert sent from the Tiyende app.';
+            const available = await SMS.isAvailableAsync();
+            if (available) {
+              await SMS.sendSMSAsync([EMERGENCY_CONTACT], msg);
+            } else {
+              Alert.alert('SMS Unavailable', `Could not open the SMS app. Please call your emergency contact directly: ${EMERGENCY_CONTACT}`);
+              return;
+            }
+            Alert.alert('SOS Sent', `Emergency alert sent to ${EMERGENCY_CONTACT}\nZambia Police: 991`);
           },
         },
       ]
@@ -102,7 +113,7 @@ export default function SafetyScreen() {
           <Text style={[styles.sosHint, { color: subText }]}>Press in case of emergency</Text>
           <View style={styles.sosContactRow}>
             <Ionicons name="person-outline" size={14} color={subText} />
-            <Text style={[styles.sosContactText, { color: subText }]}>Emergency contact: +260 97 700 0000</Text>
+            <Text style={[styles.sosContactText, { color: subText }]}>Emergency contact: {EMERGENCY_CONTACT}</Text>
           </View>
         </View>
 

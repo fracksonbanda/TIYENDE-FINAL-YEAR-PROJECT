@@ -7,7 +7,10 @@ import {
 import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import * as SMS from 'expo-sms';
-import { auth, db } from '../../firebase';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+import { onValue, ref as dbRef } from 'firebase/database';
+import { auth, db, rtdb } from '../../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { colors, shadows, radius } from '../../theme';
 import { useAppContext } from '../../context/AppContext';
@@ -26,6 +29,7 @@ import {
 } from '../../utils/geo';
 import {
   createRideRequest,
+  rateDriver,
   statusLabel,
   updateRequestStatus,
   watchPassengerActiveRequest,
@@ -92,7 +96,7 @@ function getEtaLabel(status, etaMin) {
 }
 
 export default function HomeScreen({ navigation }) {
-  const { darkMode, promoUsed, markPromoUsed } = useAppContext();
+  const { darkMode, notifications, promoUsed, markPromoUsed } = useAppContext();
   const { profile } = useUserProfile();
 
   // 'home' | 'booking' | 'tracking'
@@ -113,7 +117,16 @@ export default function HomeScreen({ navigation }) {
   const [showExtraStopSugg, setShowExtraStopSugg] = useState(false);
   const [savedPlaces, setSavedPlaces]     = useState({ home: null, work: null });
   const [showReceipt, setShowReceipt]     = useState(false);
+  const [tripRating, setTripRating]       = useState(0);
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingDone, setRatingDone]       = useState(false);
   const lastTripRef = useRef(null);
+
+  // Real device location, falling back to the Lusaka default when denied/unavailable
+  const [pickup, setPickup] = useState(DEFAULT_PICKUP);
+
+  // Live driver position (Realtime Database), while a driver is assigned
+  const [driverLiveLocation, setDriverLiveLocation] = useState(null);
 
   // Map / active trip
   const [activeRequest, setActiveRequest] = useState(null);
@@ -121,6 +134,33 @@ export default function HomeScreen({ navigation }) {
 
   const sheetAnim = useRef(new Animated.Value(0)).current;
   const inputRef  = useRef(null);
+
+  // Get the device's real position once on mount; fall back to the Lusaka
+  // default silently if permission is denied or location is unavailable.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cancelled) return;
+        setPickup({
+          name: 'Current location',
+          coords: { latitude: position.coords.latitude, longitude: position.coords.longitude },
+        });
+      } catch {
+        // keep DEFAULT_PICKUP
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Ask for notification permission once, only if the user has the setting on
+  useEffect(() => {
+    if (!notifications) return;
+    Notifications.requestPermissionsAsync().catch(() => {});
+  }, [notifications]);
 
   // Watch active request from Firestore
   useEffect(() => {
@@ -131,12 +171,35 @@ export default function HomeScreen({ navigation }) {
       (request) => {
         setActiveRequest(request);
         if (request?.destinationCoords) {
-          setMapRegion(buildMapRegion(DEFAULT_PICKUP.coords, request.destinationCoords));
+          setMapRegion(buildMapRegion(pickup.coords, request.destinationCoords));
         }
       },
       () => {}
     );
-  }, []);
+  }, [pickup]);
+
+  // Live driver position from the Realtime Database, once a driver is assigned
+  useEffect(() => {
+    if (!activeRequest?.driverId) { setDriverLiveLocation(null); return undefined; }
+    const locRef = dbRef(rtdb, `drivers/${activeRequest.driverId}/location`);
+    const unsub = onValue(locRef, (snap) => {
+      if (snap.exists()) setDriverLiveLocation(snap.val());
+    });
+    return () => unsub();
+  }, [activeRequest?.driverId]);
+
+  // Notify the passenger of key status changes, if notifications are enabled
+  const lastNotifiedStatus = useRef(null);
+  useEffect(() => {
+    if (!notifications || !activeRequest) return;
+    if (lastNotifiedStatus.current === activeRequest.status) return;
+    lastNotifiedStatus.current = activeRequest.status;
+    if (!['accepted', 'arrived', 'in_progress'].includes(activeRequest.status)) return;
+    Notifications.scheduleNotificationAsync({
+      content: { title: 'Tiyende', body: getStatusLabel(activeRequest.status) },
+      trigger: null,
+    }).catch(() => {});
+  }, [activeRequest?.status, notifications]);
 
   // Switch to tracking view when an active request appears
   useEffect(() => {
@@ -148,7 +211,11 @@ export default function HomeScreen({ navigation }) {
       const offset    = { pending: 10, accepted: 6, arrived: 0, in_progress: 0 }[activeRequest.status] ?? 5;
       setEtaMin(Math.max(1, duration + offset));
     } else if (!activeRequest && view === 'tracking') {
-      if (lastTripRef.current) setShowReceipt(true);
+      if (lastTripRef.current) {
+        setTripRating(0);
+        setRatingDone(false);
+        setShowReceipt(true);
+      }
       setView('home');
       setEtaMin(null);
     }
@@ -194,7 +261,7 @@ export default function HomeScreen({ navigation }) {
   const extraFiltered = extraStop.length > 0
     ? LUSAKA_PLACES.filter((p) => p.name.toLowerCase().includes(extraStop.toLowerCase()) && p.name !== destination)
     : [];
-  const km            = selectedPlace ? distanceKm(DEFAULT_PICKUP.coords, selectedPlace.coords) : 0;
+  const km            = selectedPlace ? distanceKm(pickup.coords, selectedPlace.coords) : 0;
   const suggestedFare = selectedPlace ? estimateFare({ distance: km, serviceType: 'ride', rideType }) : 0;
   const promoValid    = promoCode.trim().toUpperCase() === 'TIYENDE10' && !promoUsed.ride;
   const promoDiscount = promoValid ? Math.ceil((Number.parseInt(fareOffer, 10) || suggestedFare) * 0.1) : 0;
@@ -217,14 +284,14 @@ export default function HomeScreen({ navigation }) {
   };
 
   const selectDestination = (place) => {
-    const nextKm   = distanceKm(DEFAULT_PICKUP.coords, place.coords);
+    const nextKm   = distanceKm(pickup.coords, place.coords);
     const nextFare = estimateFare({ distance: nextKm, serviceType: 'ride', rideType });
     setDestination(place.name);
     setSelectedPlace(place);
     setFareOffer(String(nextFare));
     setShowSuggestions(false);
     inputRef.current?.blur();
-    setMapRegion(buildMapRegion(DEFAULT_PICKUP.coords, place.coords));
+    setMapRegion(buildMapRegion(pickup.coords, place.coords));
   };
 
   const handleServicePress = (id) => {
@@ -249,6 +316,7 @@ export default function HomeScreen({ navigation }) {
         paymentMethod,
         promoCode,
         extraStop: selectedExtraStop,
+        pickup,
       });
       if (promoValid) markPromoUsed('ride');
     } catch (error) {
@@ -280,8 +348,22 @@ export default function HomeScreen({ navigation }) {
     else Alert.alert('Trip Details', msg);
   };
 
+  const submitTripRating = async () => {
+    const trip = lastTripRef.current;
+    if (!trip || tripRating < 1) return;
+    setSubmittingRating(true);
+    try {
+      await rateDriver(trip.id, trip.driverId, tripRating);
+      setRatingDone(true);
+    } catch (error) {
+      Alert.alert('Rating Failed', error.message);
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
   const routeTarget = activeRequest?.destinationCoords || selectedPlace?.coords;
-  const routeCoords = routeTarget ? [DEFAULT_PICKUP.coords, routeTarget] : [];
+  const routeCoords = routeTarget ? [pickup.coords, routeTarget] : [];
 
   // ─────────────────────────────────────────────
   // HOME VIEW — clean, map-free landing screen
@@ -452,6 +534,36 @@ export default function HomeScreen({ navigation }) {
                   </View>
                 </View>
               )}
+              {lastTripRef.current?.driverId && (
+                <View style={styles.rateBox}>
+                  <Text style={[styles.rateLabel, { color: textColor }]}>
+                    {ratingDone ? 'Thanks for your feedback!' : 'Rate your driver'}
+                  </Text>
+                  {!ratingDone && (
+                    <View style={styles.rateStars}>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <TouchableOpacity key={n} onPress={() => setTripRating(n)} disabled={submittingRating}>
+                          <Ionicons
+                            name={n <= tripRating ? 'star' : 'star-outline'}
+                            size={32}
+                            color={colors.accent}
+                            style={{ marginHorizontal: 3 }}
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {!ratingDone && tripRating > 0 && (
+                    <TouchableOpacity
+                      style={[styles.rateSubmitBtn, submittingRating && { opacity: 0.65 }]}
+                      onPress={submitTripRating}
+                      disabled={submittingRating}
+                    >
+                      <Text style={styles.rateSubmitText}>{submittingRating ? 'Submitting…' : 'Submit Rating'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
               <TouchableOpacity
                 style={[styles.receiptBtn, { backgroundColor: colors.primary }]}
                 onPress={() => setShowReceipt(false)}
@@ -476,7 +588,7 @@ export default function HomeScreen({ navigation }) {
         {/* Map fills the top */}
         <MapView style={styles.map} region={mapRegion} mapType="none" showsUserLocation={false}>
           <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
-          <Marker coordinate={DEFAULT_PICKUP.coords}>
+          <Marker coordinate={pickup.coords}>
             <View style={styles.myDot}><View style={styles.myDotInner} /></View>
           </Marker>
           {routeTarget && (
@@ -742,16 +854,21 @@ export default function HomeScreen({ navigation }) {
           showsUserLocation={false}
         >
           <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
-          <Marker coordinate={DEFAULT_PICKUP.coords}>
+          <Marker coordinate={pickup.coords}>
             <View style={styles.myDot}><View style={styles.myDotInner} /></View>
           </Marker>
+          {driverLiveLocation && (
+            <Marker coordinate={driverLiveLocation}>
+              <View style={styles.driverMarker}><Ionicons name="car-sport" size={16} color={colors.white} /></View>
+            </Marker>
+          )}
           {activeRequest.destinationCoords && (
             <>
               <Marker coordinate={activeRequest.destinationCoords}>
                 <View style={styles.destPin}><Ionicons name="location" size={30} color={colors.error} /></View>
               </Marker>
               <Polyline
-                coordinates={[DEFAULT_PICKUP.coords, activeRequest.destinationCoords]}
+                coordinates={[pickup.coords, activeRequest.destinationCoords]}
                 strokeColor={colors.primary}
                 strokeWidth={4}
                 lineDashPattern={[8, 4]}
@@ -948,6 +1065,7 @@ const styles = StyleSheet.create({
 
   // ── Tracking view
   trackingMap:    { flex: 1 },
+  driverMarker:   { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.white },
 
   trackingEtaChip:{ position: 'absolute', top: 52, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.full, paddingVertical: 10, paddingHorizontal: 18, ...shadows.medium },
   trackingEtaText:{ fontSize: 18, fontWeight: '900' },
@@ -1014,4 +1132,9 @@ const styles = StyleSheet.create({
   receiptFare:    { fontSize: 18, fontWeight: '900', color: colors.primary },
   receiptBtn:     { borderRadius: radius.md, paddingVertical: 16, alignItems: 'center' },
   receiptBtnText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  rateBox:        { alignItems: 'center', marginBottom: 16 },
+  rateLabel:      { fontSize: 13, fontWeight: '700', marginBottom: 10 },
+  rateStars:      { flexDirection: 'row', marginBottom: 12 },
+  rateSubmitBtn:  { backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 24 },
+  rateSubmitText: { color: colors.white, fontSize: 13, fontWeight: '800' },
 });

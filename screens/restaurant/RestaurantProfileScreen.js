@@ -23,7 +23,7 @@ const CUISINE_OPTIONS = [
 ];
 
 export default function RestaurantProfileScreen() {
-  const { darkMode, toggleDarkMode } = useAppContext();
+  const { darkMode, setDarkMode } = useAppContext();
   const [restaurant, setRestaurant] = useState(null);
   const [name, setName]             = useState('');
   const [address, setAddress]       = useState('');
@@ -47,7 +47,7 @@ export default function RestaurantProfileScreen() {
       setOpenHours(r.openHours || '');
       setCuisine(r.cuisineType || '');
       setLogo(r.logoBase64 || '');
-    }, () => {});
+    }, (error) => Alert.alert('Restaurant Profile', error.message));
   }, [uid]);
 
   const pickLogo = async () => {
@@ -191,7 +191,7 @@ export default function RestaurantProfileScreen() {
                 <Ionicons name={darkMode ? 'moon' : 'sunny-outline'} size={20} color={colors.primary} />
                 <Text style={[styles.settingTitle, { color: textColor }]}>Dark Mode</Text>
               </View>
-              <Switch value={darkMode} onValueChange={toggleDarkMode} trackColor={{ true: colors.primary }} thumbColor={colors.white} />
+              <Switch value={darkMode} onValueChange={setDarkMode} trackColor={{ true: colors.primary }} thumbColor={colors.white} />
             </View>
           </View>
 

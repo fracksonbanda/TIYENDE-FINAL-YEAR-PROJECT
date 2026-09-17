@@ -6,18 +6,25 @@ import {
 import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { ref as dbRef, remove as dbRemove, set as dbSet } from 'firebase/database';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+import { auth, db, rtdb } from '../../firebase';
 import { colors, shadows, radius } from '../../theme';
+import { useAppContext } from '../../context/AppContext';
 import useUserProfile from '../../hooks/useUserProfile';
 import {
   acceptRequest,
+  ratePassenger,
   statusLabel,
   updateRequestStatus,
   watchDriverActiveRequest,
   watchDriverCompletedRequests,
   watchDriverPendingRequests,
 } from '../../services/requestService';
-import { buildMapRegion, DEFAULT_PICKUP, initialsFromName, LUSAKA_CENTER } from '../../utils/geo';
+import { buildMapRegion, DEFAULT_PICKUP, distanceKm, formatDistance, initialsFromName, LUSAKA_CENTER } from '../../utils/geo';
+
+const NEARBY_RADIUS_KM = 25;
 
 const FILTERS = [
   { id: 'all', label: 'All', icon: 'apps-outline' },
@@ -64,6 +71,7 @@ function serviceLabel(type) {
 
 export default function DriverDashboard({ navigation }) {
   const { profile } = useUserProfile();
+  const { notifications } = useAppContext();
   const [isOnline, setIsOnline] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [declinedIds, setDeclinedIds] = useState([]);
@@ -73,7 +81,9 @@ export default function DriverDashboard({ navigation }) {
   const [acceptingId, setAcceptingId] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('mobile');
+  const [passengerRatingInput, setPassengerRatingInput] = useState(5);
   const [mapRegion, setMapRegion] = useState({ ...LUSAKA_CENTER, latitudeDelta: 0.05, longitudeDelta: 0.05 });
+  const [driverLocation, setDriverLocation] = useState(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -114,6 +124,52 @@ export default function DriverDashboard({ navigation }) {
     return watchDriverPendingRequests(setPendingRequests, (error) => Alert.alert('Requests', error.message));
   }, [isOnline]);
 
+  // Broadcast this driver's live position to the Realtime Database while online,
+  // so passengers tracking an active trip can see a moving driver marker.
+  useEffect(() => {
+    if (!isOnline) { setDriverLocation(null); return undefined; }
+    const user = auth.currentUser;
+    if (!user) return undefined;
+    let subscription;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+        subscription = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 8000, distanceInterval: 25 },
+          (loc) => {
+            const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+            setDriverLocation(coords);
+            dbSet(dbRef(rtdb, `drivers/${user.uid}/location`), { ...coords, updatedAt: Date.now() }).catch(() => {});
+          },
+        );
+      } catch {
+        // no GPS available — nearby filtering falls back to showing everything
+      }
+    })();
+    return () => {
+      cancelled = true;
+      subscription?.remove?.();
+      if (user) dbRemove(dbRef(rtdb, `drivers/${user.uid}/location`)).catch(() => {});
+    };
+  }, [isOnline]);
+
+  // Local alert when a new request appears, if notifications are enabled
+  const knownRequestIds = useRef(new Set());
+  useEffect(() => {
+    if (!notifications) { knownRequestIds.current = new Set(pendingRequests.map((r) => r.id)); return; }
+    const freshIds = pendingRequests.map((r) => r.id);
+    const hasNew = freshIds.some((id) => !knownRequestIds.current.has(id));
+    if (hasNew && knownRequestIds.current.size > 0) {
+      Notifications.scheduleNotificationAsync({
+        content: { title: 'Tiyende', body: 'A new ride request is available nearby.' },
+        trigger: null,
+      }).catch(() => {});
+    }
+    knownRequestIds.current = new Set(freshIds);
+  }, [pendingRequests, notifications]);
+
   useEffect(() => {
     if (!isOnline) return undefined;
     const loop = Animated.loop(Animated.sequence([
@@ -134,7 +190,13 @@ export default function DriverDashboard({ navigation }) {
 
   const filteredRequests = pendingRequests
     .filter((request) => !declinedIds.includes(request.id))
-    .filter((request) => selectedFilter === 'all' || request.serviceType === selectedFilter);
+    .filter((request) => selectedFilter === 'all' || request.serviceType === selectedFilter)
+    .map((request) => ({
+      ...request,
+      awayKm: driverLocation && request.pickupCoords ? distanceKm(driverLocation, request.pickupCoords) : null,
+    }))
+    .filter((request) => request.awayKm === null || request.awayKm <= NEARBY_RADIUS_KM)
+    .sort((a, b) => (a.awayKm ?? 999) - (b.awayKm ?? 999));
 
   const toggleOnline = async () => {
     const goingOnline = !isOnline;
@@ -246,7 +308,11 @@ export default function DriverDashboard({ navigation }) {
         paymentConfirmedMethod: selectedPayment,
         payoutAmount: Number(activeRequest.fare || 0),
       });
+      if (activeRequest.passengerId) {
+        await ratePassenger(activeRequest.id, activeRequest.passengerId, passengerRatingInput).catch(() => {});
+      }
       setShowPayment(false);
+      setPassengerRatingInput(5);
       Alert.alert('Completed', `You earned ZK ${activeRequest.fare}.`);
     } catch (error) {
       Alert.alert('Complete Failed', error.message);
@@ -480,6 +546,7 @@ export default function DriverDashboard({ navigation }) {
                       { icon: 'cash-outline', val: `ZK ${item.fare}`, color: colors.primary },
                       { icon: 'navigate-outline', val: item.distanceText || 'Nearby', color: colors.textSecondary },
                       { icon: 'time-outline', val: `${item.durationMinutes || '--'} min`, color: colors.textSecondary },
+                      ...(item.awayKm != null ? [{ icon: 'locate-outline', val: `${formatDistance(item.awayKm)} away`, color: '#0EA5E9' }] : []),
                     ].map((meta) => (
                       <View key={meta.icon} style={styles.metaItem}>
                         <Ionicons name={meta.icon} size={13} color={meta.color} />
@@ -535,6 +602,19 @@ export default function DriverDashboard({ navigation }) {
                 {selectedPayment === method.id && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
               </TouchableOpacity>
             ))}
+            <Text style={styles.rateLabel}>Rate this passenger</Text>
+            <View style={styles.rateStars}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <TouchableOpacity key={n} onPress={() => setPassengerRatingInput(n)}>
+                  <Ionicons
+                    name={n <= passengerRatingInput ? 'star' : 'star-outline'}
+                    size={26}
+                    color={colors.accent}
+                    style={{ marginHorizontal: 3 }}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
             <TouchableOpacity style={styles.confirmPayBtn} onPress={finalizeRequest}>
               <Text style={styles.confirmPayBtnText}>Complete Request</Text>
             </TouchableOpacity>
@@ -645,6 +725,8 @@ const styles = StyleSheet.create({
   payOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryGhost },
   payOptionIcon: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
   payOptionText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  rateLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginTop: 4, marginBottom: 8 },
+  rateStars: { flexDirection: 'row', marginBottom: 16 },
   confirmPayBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 15, alignItems: 'center', marginTop: 8, ...shadows.green },
   confirmPayBtnText: { color: colors.white, fontSize: 16, fontWeight: '800' },
   closePayBtn: { alignItems: 'center', paddingVertical: 14 },

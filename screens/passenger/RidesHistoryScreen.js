@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { colors, shadows, radius } from '../../theme';
 import { useAppContext } from '../../context/AppContext';
+import useUserProfile from '../../hooks/useUserProfile';
 import { watchPassengerCompletedRequests } from '../../services/requestService';
 
 const SERVICE_CONFIG = {
@@ -24,6 +25,7 @@ function formatDate(timestamp) {
 
 export default function RidesHistoryScreen() {
   const { darkMode } = useAppContext();
+  const { profile } = useUserProfile();
   const [requests, setRequests]       = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -42,6 +44,10 @@ export default function RidesHistoryScreen() {
   }, []);
 
   const totalSpent = requests.reduce((s, r) => s + Number(r.fare || 0), 0);
+  const ratedTrips = requests.filter((r) => typeof r.passengerRatingByDriver === 'number');
+  const avgRating = ratedTrips.length
+    ? (ratedTrips.reduce((s, r) => s + r.passengerRatingByDriver, 0) / ratedTrips.length).toFixed(1)
+    : Number(profile?.rating || 5).toFixed(1);
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
@@ -65,7 +71,7 @@ export default function RidesHistoryScreen() {
           </View>
           <View style={styles.summaryCard}>
             <Ionicons name="star" size={18} color={colors.accent} style={{ marginBottom: 4 }} />
-            <Text style={styles.summaryVal}>5.0</Text>
+            <Text style={styles.summaryVal}>{avgRating}</Text>
             <Text style={styles.summaryLbl}>Avg rating</Text>
           </View>
         </View>

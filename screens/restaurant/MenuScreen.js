@@ -33,7 +33,7 @@ export default function MenuScreen({ navigation }) {
 
   useEffect(() => {
     if (!uid) return;
-    return watchMenuItems(uid, setItems, () => {});
+    return watchMenuItems(uid, setItems, (error) => Alert.alert('Menu', error.message));
   }, [uid]);
 
   const grouped = useMemo(() => {
@@ -74,7 +74,7 @@ export default function MenuScreen({ navigation }) {
   const borderColor = darkMode ? '#30363D' : colors.border;
 
   const renderItem = ({ item }) => (
-    <View style={[styles.menuItem, { backgroundColor: cardBg, borderColor }]}>
+    <View key={item.id} style={[styles.menuItem, { backgroundColor: cardBg, borderColor }]}>
       <ItemImage item={item} />
       <View style={{ flex: 1 }}>
         <View style={styles.itemHeader}>

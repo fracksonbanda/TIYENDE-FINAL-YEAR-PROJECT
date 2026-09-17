@@ -10,6 +10,8 @@ import { colors, shadows, radius } from '../../theme';
 import useUserProfile from '../../hooks/useUserProfile';
 import ProfilePhotoButton from '../../components/ProfilePhotoButton';
 import { pickAndUploadProfileImage, saveUserProfile } from '../../services/profileService';
+import { watchPassengerCompletedRequests } from '../../services/requestService';
+import { watchWallet } from '../../services/walletService';
 
 const MENU_SECTIONS = [
   {
@@ -45,6 +47,8 @@ export default function ProfileScreen({ navigation }) {
   const [phone, setPhone]        = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [savingProfile, setSavingProfile]   = useState(false);
+  const [ridesCount, setRidesCount]         = useState(0);
+  const [walletBalance, setWalletBalance]   = useState(0);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -62,6 +66,14 @@ export default function ProfileScreen({ navigation }) {
     setFullName(profile?.fullName || profile?.displayName || '');
     setPhone(profile?.phone || profile?.phoneNumber || '');
   }, [profile?.fullName, profile?.displayName, profile?.phone, profile?.phoneNumber]);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return undefined;
+    const offRides = watchPassengerCompletedRequests(user.uid, (items) => setRidesCount(items.length), () => {});
+    const offWallet = watchWallet(user.uid, (wallet) => setWalletBalance(wallet.balance || 0), () => {});
+    return () => { offRides?.(); offWallet?.(); };
+  }, []);
 
   const profileName = profile?.fullName || profile?.displayName || profile?.email || profile?.phoneNumber || 'Tiyende Rider';
   const profileSub  = profile?.phone || profile?.phoneNumber || profile?.email || profile?.identifier || 'Passenger';
@@ -146,7 +158,7 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.statIconBg}>
               <Ionicons name="car-sport" size={14} color={colors.white} />
             </View>
-            <Text style={styles.statVal}>0</Text>
+            <Text style={styles.statVal}>{ridesCount}</Text>
             <Text style={styles.statLbl}>Rides</Text>
           </View>
           <View style={styles.statDivider} />
@@ -154,7 +166,7 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.statIconBg}>
               <Ionicons name="wallet" size={14} color={colors.white} />
             </View>
-            <Text style={styles.statVal}>ZK 0</Text>
+            <Text style={styles.statVal}>ZK {walletBalance}</Text>
             <Text style={styles.statLbl}>Wallet</Text>
           </View>
         </View>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { auth, db } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import AuthNavigator from './navigation/AuthNavigator';
@@ -10,6 +11,16 @@ import DriverNavigator from './navigation/DriverNavigator';
 import RestaurantNavigator from './navigation/RestaurantNavigator';
 import LoadingScreen from './components/LoadingScreen';
 import { AppProvider } from './context/AppContext';
+
+// Lets locally-scheduled notifications (ride/order status updates) actually
+// display a banner while the app is in the foreground.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function App() {
   const [user, setUser] = useState(undefined);

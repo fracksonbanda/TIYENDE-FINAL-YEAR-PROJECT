@@ -4,6 +4,7 @@ import {
   Alert, Animated, StatusBar, ScrollView, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { useAppContext } from '../../context/AppContext';
 import { colors, shadows, radius } from '../../theme';
 import { auth } from '../../firebase';
@@ -11,6 +12,11 @@ import { auth } from '../../firebase';
 export default function SettingsScreen({ navigation }) {
   const { darkMode, setDarkMode, notifications, setNotifications, trafficLayer, setTrafficLayer } = useAppContext();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const handleNotificationsToggle = async (value) => {
+    setNotifications(value);
+    if (value) await Notifications.requestPermissionsAsync().catch(() => {});
+  };
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
@@ -30,7 +36,7 @@ export default function SettingsScreen({ navigation }) {
         {
           icon: 'notifications-outline', label: 'Push Notifications',
           sub: 'Ride updates, promotions',
-          type: 'switch', value: notifications, onChange: setNotifications,
+          type: 'switch', value: notifications, onChange: handleNotificationsToggle,
         },
         {
           icon: 'layers-outline', label: 'Show Traffic Layer',

@@ -163,8 +163,8 @@ export default function RestaurantDashboard({ navigation }) {
 
   useEffect(() => {
     if (!uid) return;
-    const off1 = watchRestaurantProfile(uid, setRestaurant, () => {});
-    const off2 = watchRestaurantOrders(uid, setOrders, () => {});
+    const off1 = watchRestaurantProfile(uid, setRestaurant, (error) => Alert.alert('Restaurant Profile', error.message));
+    const off2 = watchRestaurantOrders(uid, setOrders, (error) => Alert.alert('Orders', error.message));
     return () => { off1(); off2(); };
   }, [uid]);
 

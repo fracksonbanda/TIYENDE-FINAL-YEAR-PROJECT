@@ -269,6 +269,40 @@ export function statusLabel(status, serviceType = 'ride') {
   return labels[status] || status;
 }
 
+async function applyRatingToProfile(userId, ratingValue) {
+  const userRef = doc(db, 'users', userId);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(userRef);
+    const data = snap.exists() ? snap.data() : {};
+    const prevCount = data.ratingCount || 0;
+    const prevSum = data.ratingSum ?? (data.rating ? data.rating * (prevCount || 1) : 0);
+    const nextCount = prevCount + 1;
+    const nextSum = prevSum + ratingValue;
+    const nextRating = Math.round((nextSum / nextCount) * 10) / 10;
+    transaction.set(userRef, {
+      ratingSum: nextSum,
+      ratingCount: nextCount,
+      rating: nextRating,
+    }, { merge: true });
+  });
+}
+
+export async function rateDriver(requestId, driverId, ratingValue) {
+  await updateDoc(doc(db, 'serviceRequests', requestId), {
+    driverRatingByPassenger: ratingValue,
+    updatedAt: serverTimestamp(),
+  });
+  if (driverId) await applyRatingToProfile(driverId, ratingValue);
+}
+
+export async function ratePassenger(requestId, passengerId, ratingValue) {
+  await updateDoc(doc(db, 'serviceRequests', requestId), {
+    passengerRatingByDriver: ratingValue,
+    updatedAt: serverTimestamp(),
+  });
+  if (passengerId) await applyRatingToProfile(passengerId, ratingValue);
+}
+
 export function foodStatusToStage(status) {
   const map = {
     pending_restaurant:   0,
