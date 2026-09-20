@@ -1,0 +1,44 @@
+workflows:
+  ios-unsigned-ipa:
+    name: Tiyende iOS (unsigned .ipa for free sideloading)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: 20.19.4
+      xcode: latest
+      cocoapods: default
+      vars:
+        APP_NAME: "Tiyende"
+    cache:
+      cache_paths:
+        - $HOME/.npm
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Generate the native iOS project (Expo prebuild)
+        script: npx expo prebuild --platform ios --no-install
+      - name: Install CocoaPods dependencies
+        script: cd ios && pod install
+      - name: Build the app without code signing
+        script: |
+          set -o pipefail
+          xcodebuild \
+            -workspace "ios/$APP_NAME.xcworkspace" \
+            -scheme "$APP_NAME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/derived \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: Package the .app into an unsigned .ipa
+        script: |
+          set -e
+          mkdir -p build/ipa/Payload
+          cp -R "build/derived/Build/Products/Release-iphoneos/$APP_NAME.app" build/ipa/Payload/
+          cd build/ipa
+          zip -qry "$APP_NAME-unsigned.ipa" Payload
+    artifacts:
+      - build/ipa/*.ipa
