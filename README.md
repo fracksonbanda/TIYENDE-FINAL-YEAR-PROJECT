@@ -287,4 +287,4 @@ service firebase.storage {
 ## Developer
 
 **Frackson Banda** — bmikala0@gmail.com  
-Built with Claude Code · Expo SDK 54 · Firebase v12
+Built with Claude Code · Expo SDK 57 · Firebase v12
