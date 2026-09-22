@@ -40,13 +40,18 @@ const PAYMENT_OPTIONS = [
   { id: 'wallet', label: 'Wallet', icon: 'wallet-outline' },
 ];
 
-function Avatar({ name, photoURL, size = 42 }) {
-  if (photoURL) {
-    return <Image source={{ uri: photoURL }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.primaryGhost }} />;
-  }
-  return (
+function Avatar({ name, photoURL, size = 42, ring }) {
+  const inner = photoURL ? (
+    <Image source={{ uri: photoURL }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.primaryGhost }} />
+  ) : (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
       <Text style={styles.avatarText}>{initialsFromName(name)}</Text>
+    </View>
+  );
+  if (!ring) return inner;
+  return (
+    <View style={[styles.avatarRing, { width: size + 6, height: size + 6, borderRadius: (size + 6) / 2, borderColor: ring }]}>
+      {inner}
     </View>
   );
 }
@@ -71,7 +76,7 @@ function serviceLabel(type) {
 
 export default function DriverDashboard({ navigation }) {
   const { profile } = useUserProfile();
-  const { notifications } = useAppContext();
+  const { notifications, darkMode } = useAppContext();
   const [isOnline, setIsOnline] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [declinedIds, setDeclinedIds] = useState([]);
@@ -87,6 +92,15 @@ export default function DriverDashboard({ navigation }) {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Theme tokens — the header stays on the dark brand palette in both modes
+  // (matching the rest of the app's headers); only the body surface switches.
+  const bg         = darkMode ? colors.black : colors.offWhite;
+  const cardBg     = darkMode ? colors.darkCard : colors.white;
+  const borderColor= darkMode ? colors.darkBorder : colors.borderLight;
+  const textColor  = darkMode ? colors.textOnDark : colors.textPrimary;
+  const subText    = darkMode ? colors.textTertiary : colors.textSecondary;
+  const chipBg     = darkMode ? colors.darkSurface : colors.white;
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }).start();
@@ -333,7 +347,7 @@ export default function DriverDashboard({ navigation }) {
         : 'Complete';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bg }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.charcoal} />
 
       {activeRequest && (
@@ -359,55 +373,58 @@ export default function DriverDashboard({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.driverIntro}>
-            <Avatar name={driverName} photoURL={profile?.photoURL} size={46} />
+            <Avatar name={driverName} photoURL={profile?.photoURL} size={48} ring={isOnline ? colors.success : 'rgba(255,255,255,0.15)'} />
             <View>
               <Text style={styles.greeting}>Good day</Text>
               <Text style={styles.driverName}>{driverName}</Text>
             </View>
           </View>
-          <View style={[styles.statusBadge, isOnline && styles.statusOnline]}>
-            <View style={[styles.statusDot, isOnline && styles.statusDotOn]} />
+          <TouchableOpacity
+            style={[styles.statusPill, isOnline && styles.statusPillOn]}
+            onPress={toggleOnline}
+            activeOpacity={0.85}
+            disabled={!!activeRequest}
+          >
+            <Animated.View style={[styles.statusDot, isOnline && styles.statusDotOn, isOnline && { transform: [{ scale: pulseAnim }] }]} />
             <Text style={[styles.statusText, isOnline && { color: colors.success }]}>{isOnline ? 'Online' : 'Offline'}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.earningsCard}>
+        <View style={styles.statsRow}>
           {[
-            { val: `ZK ${todayEarnings}`, lbl: 'Today' },
-            { val: todayTrips, lbl: 'Jobs' },
-            { val: `${profile?.rating || 5} star`, lbl: 'Rating', gold: true },
-          ].map((item, index) => (
-            <React.Fragment key={item.lbl}>
-              {index > 0 && <View style={styles.earningDiv} />}
-              <View style={styles.earningItem}>
-                <Text style={[styles.earningVal, item.gold && { color: colors.accent }]}>{item.val}</Text>
-                <Text style={styles.earningLbl}>{item.lbl}</Text>
+            { val: `ZK ${todayEarnings}`, lbl: 'Today', icon: 'cash-outline' },
+            { val: String(todayTrips), lbl: 'Jobs', icon: 'checkmark-done-outline' },
+            { val: String(profile?.rating || 5), lbl: 'Rating', icon: 'star', gold: true },
+          ].map((item) => (
+            <View key={item.lbl} style={styles.statCard}>
+              <View style={[styles.statIconBg, item.gold && { backgroundColor: 'rgba(240,192,64,0.18)' }]}>
+                <Ionicons name={item.icon} size={15} color={item.gold ? colors.accent : colors.primaryLight} />
               </View>
-            </React.Fragment>
+              <Text style={styles.statVal}>{item.val}</Text>
+              <Text style={styles.statLbl}>{item.lbl}</Text>
+            </View>
           ))}
         </View>
 
         {!activeRequest && (
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <TouchableOpacity style={[styles.onlineBtn, isOnline && styles.offlineBtn]} onPress={toggleOnline} activeOpacity={0.85}>
-              <Ionicons name="power" size={20} color={colors.white} />
-              <Text style={styles.onlineBtnText}>{isOnline ? 'Go Offline' : 'Go Online'}</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          <TouchableOpacity style={[styles.onlineBtn, isOnline && styles.offlineBtn]} onPress={toggleOnline} activeOpacity={0.85}>
+            <Ionicons name="power" size={19} color={colors.white} />
+            <Text style={styles.onlineBtnText}>{isOnline ? 'Go Offline' : 'Go Online'}</Text>
+          </TouchableOpacity>
         )}
       </View>
 
       <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
         {activeRequest ? (
-          <View style={styles.activeRidePanel}>
+          <View style={[styles.activeRidePanel, { backgroundColor: cardBg, borderColor }]}>
             <View style={styles.activeRideHeader}>
               <Avatar name={activeRequest.passengerName} photoURL={activeRequest.passengerPhotoURL} size={50} />
               <View style={{ flex: 1 }}>
                 <View style={styles.requestTypeRow}>
-                  <Ionicons name={serviceIcon(activeRequest.serviceType)} size={14} color={colors.primary} />
+                  <Ionicons name={serviceIcon(activeRequest.serviceType)} size={13} color={colors.primaryLight} />
                   <Text style={styles.requestType}>{serviceLabel(activeRequest.serviceType)}</Text>
                 </View>
-                <Text style={styles.passengerName}>{activeRequest.passengerName}</Text>
+                <Text style={[styles.passengerName, { color: textColor }]}>{activeRequest.passengerName}</Text>
                 <View style={styles.ratingRow}>
                   <Ionicons name="star" size={12} color={colors.accent} />
                   <Text style={styles.passengerRating}>{activeRequest.passengerRating || 5}</Text>
@@ -415,46 +432,55 @@ export default function DriverDashboard({ navigation }) {
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={styles.rideFare}>ZK {activeRequest.fare}</Text>
-                <Text style={styles.rideDistance}>{activeRequest.distanceText || ''}</Text>
+                <Text style={[styles.rideDistance, { color: subText }]}>{activeRequest.distanceText || ''}</Text>
               </View>
             </View>
 
-            <View style={styles.routeInfo}>
-              <View style={styles.routeDotGreen} />
-              <Text style={styles.routePickup}>{activeRequest.pickupName}</Text>
-            </View>
-            <View style={[styles.routeInfo, { marginTop: 6 }]}>
-              <View style={styles.routeDotRed} />
-              <Text style={styles.routeDest}>{activeRequest.destinationName}</Text>
+            <View style={[styles.routeCard, { backgroundColor: darkMode ? colors.darkSurface : colors.offWhite }]}>
+              <View style={styles.routeInfo}>
+                <View style={styles.routeDotGreen} />
+                <Text style={[styles.routePickup, { color: subText }]} numberOfLines={1}>{activeRequest.pickupName}</Text>
+              </View>
+              <View style={styles.routeConnector} />
+              <View style={styles.routeInfo}>
+                <View style={styles.routeDotRed} />
+                <Text style={[styles.routeDest, { color: textColor }]} numberOfLines={1}>{activeRequest.destinationName}</Text>
+              </View>
             </View>
 
             {activeRequest.serviceType === 'food' && activeRequest.items?.length ? (
-              <View style={styles.foodItems}>
+              <View style={[styles.foodItems, { backgroundColor: darkMode ? colors.darkSurface : colors.offWhite }]}>
                 {activeRequest.items.map((item) => (
-                  <Text key={item.id} style={styles.foodItemText}>{item.qty} x {item.name}</Text>
+                  <Text key={item.id} style={[styles.foodItemText, { color: textColor }]}>{item.qty} x {item.name}</Text>
                 ))}
               </View>
             ) : null}
 
             <View style={styles.contactActions}>
-              <TouchableOpacity style={styles.contactBtn} onPress={openNavigation}>
-                <Ionicons name="navigate" size={17} color="#0EA5E9" />
-                <Text style={[styles.contactBtnText, { color: '#0EA5E9' }]}>
-                  {activeRequest.status === 'accepted' ? 'To Pickup' : 'Navigate'}
-                </Text>
+              <TouchableOpacity style={styles.iconActionBtn} onPress={openNavigation}>
+                <View style={[styles.iconActionCircle, { backgroundColor: 'rgba(14,165,233,0.14)' }]}>
+                  <Ionicons name="navigate" size={18} color="#0EA5E9" />
+                </View>
+                <Text style={[styles.iconActionText, { color: subText }]}>{activeRequest.status === 'accepted' ? 'To Pickup' : 'Navigate'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.contactBtn} onPress={openTripChat}>
-                <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.primary} />
-                <Text style={styles.contactBtnText}>Message</Text>
+              <TouchableOpacity style={styles.iconActionBtn} onPress={openTripChat}>
+                <View style={styles.iconActionCircle}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primaryLight} />
+                </View>
+                <Text style={[styles.iconActionText, { color: subText }]}>Message</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.contactBtn} onPress={openDataCall}>
-                <Ionicons name="videocam-outline" size={17} color={colors.primary} />
-                <Text style={styles.contactBtnText}>Data Call</Text>
+              <TouchableOpacity style={styles.iconActionBtn} onPress={openDataCall}>
+                <View style={styles.iconActionCircle}>
+                  <Ionicons name="videocam-outline" size={18} color={colors.primaryLight} />
+                </View>
+                <Text style={[styles.iconActionText, { color: subText }]}>Data Call</Text>
               </TouchableOpacity>
               {activeRequest.serviceType === 'food' && (
-                <TouchableOpacity style={styles.contactBtn} onPress={openRestaurantChat}>
-                  <Ionicons name="restaurant-outline" size={17} color={colors.primary} />
-                  <Text style={styles.contactBtnText}>Restaurant</Text>
+                <TouchableOpacity style={styles.iconActionBtn} onPress={openRestaurantChat}>
+                  <View style={styles.iconActionCircle}>
+                    <Ionicons name="restaurant-outline" size={18} color={colors.primaryLight} />
+                  </View>
+                  <Text style={[styles.iconActionText, { color: subText }]}>Restaurant</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -487,17 +513,17 @@ export default function DriverDashboard({ navigation }) {
               contentContainerStyle={styles.filterList}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={[styles.filterChip, selectedFilter === item.id && styles.filterChipOn]}
+                  style={[styles.filterChip, { backgroundColor: chipBg, borderColor }, selectedFilter === item.id && styles.filterChipOn]}
                   onPress={() => setSelectedFilter(item.id)}
                 >
-                  <Ionicons name={item.icon} size={14} color={selectedFilter === item.id ? colors.white : colors.primary} />
+                  <Ionicons name={item.icon} size={14} color={selectedFilter === item.id ? colors.white : colors.primaryLight} />
                   <Text style={[styles.filterText, selectedFilter === item.id && styles.filterTextOn]}>{item.label}</Text>
                 </TouchableOpacity>
               )}
             />
 
-            <Text style={styles.requestsTitle}>
-              <Text style={styles.requestsCount}>{filteredRequests.length} </Text>
+            <Text style={[styles.requestsTitle, { color: subText }]}>
+              <Text style={[styles.requestsCount, { color: textColor }]}>{filteredRequests.length} </Text>
               {filteredRequests.length === 1 ? 'request' : 'requests'} available
             </Text>
             <FlatList
@@ -505,27 +531,26 @@ export default function DriverDashboard({ navigation }) {
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
               renderItem={({ item }) => (
-                <View style={styles.rideCard}>
+                <View style={[styles.rideCard, { backgroundColor: cardBg, borderColor }]}>
                   <View style={styles.passengerRow}>
-                    <Avatar name={item.passengerName} photoURL={item.passengerPhotoURL} size={38} />
+                    <View style={[styles.svcIconBg, { backgroundColor: darkMode ? colors.darkSurface : colors.primaryGhost }]}>
+                      <Ionicons name={serviceIcon(item.serviceType)} size={17} color={colors.primaryLight} />
+                    </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.passengerLabel}>{item.passengerName}</Text>
-                      <View style={styles.requestTypeRow}>
-                        <Ionicons name={serviceIcon(item.serviceType)} size={12} color={colors.primary} />
-                        <Text style={styles.requestTypeSmall}>{serviceLabel(item.serviceType)}</Text>
-                      </View>
+                      <Text style={[styles.passengerLabel, { color: textColor }]}>{item.passengerName}</Text>
+                      <Text style={styles.requestTypeSmall}>{serviceLabel(item.serviceType)}</Text>
                     </View>
                     <Text style={styles.requestFare}>ZK {item.fare}</Text>
                   </View>
                   <View style={styles.rideRoute}>
                     <View style={styles.routeDots}>
                       <View style={styles.routeDotGreen} />
-                      <View style={styles.routeLine} />
+                      <View style={[styles.routeLine, { backgroundColor: borderColor }]} />
                       <View style={styles.routeDotRed} />
                     </View>
                     <View style={styles.routeLabels}>
-                      <Text style={styles.routePickupText}>{item.pickupName}</Text>
-                      <Text style={styles.routeDestText}>{item.destinationName}</Text>
+                      <Text style={[styles.routePickupText, { color: subText }]} numberOfLines={1}>{item.pickupName}</Text>
+                      <Text style={[styles.routeDestText, { color: textColor }]} numberOfLines={1}>{item.destinationName}</Text>
                     </View>
                   </View>
                   {item.serviceType === 'food' && item.items?.length ? (
@@ -536,16 +561,16 @@ export default function DriverDashboard({ navigation }) {
                           <Text style={styles.readyBadgeText}>FOOD READY FOR PICKUP</Text>
                         </View>
                       )}
-                      <Text style={styles.orderPreview} numberOfLines={2}>
+                      <Text style={[styles.orderPreview, { backgroundColor: darkMode ? colors.darkSurface : colors.offWhite, color: subText }]} numberOfLines={2}>
                         {item.items.map((food) => `${food.qty} x ${food.name}`).join(', ')}
                       </Text>
                     </View>
                   ) : null}
-                  <View style={styles.rideMeta}>
+                  <View style={[styles.rideMeta, { borderTopColor: borderColor }]}>
                     {[
-                      { icon: 'cash-outline', val: `ZK ${item.fare}`, color: colors.primary },
-                      { icon: 'navigate-outline', val: item.distanceText || 'Nearby', color: colors.textSecondary },
-                      { icon: 'time-outline', val: `${item.durationMinutes || '--'} min`, color: colors.textSecondary },
+                      { icon: 'cash-outline', val: `ZK ${item.fare}`, color: colors.primaryLight },
+                      { icon: 'navigate-outline', val: item.distanceText || 'Nearby', color: subText },
+                      { icon: 'time-outline', val: `${item.durationMinutes || '--'} min`, color: subText },
                       ...(item.awayKm != null ? [{ icon: 'locate-outline', val: `${formatDistance(item.awayKm)} away`, color: '#0EA5E9' }] : []),
                     ].map((meta) => (
                       <View key={meta.icon} style={styles.metaItem}>
@@ -555,8 +580,8 @@ export default function DriverDashboard({ navigation }) {
                     ))}
                   </View>
                   <View style={styles.rideActions}>
-                    <TouchableOpacity style={styles.declineBtn} onPress={() => declineRequest(item.id)}>
-                      <Text style={styles.declineBtnText}>Decline</Text>
+                    <TouchableOpacity style={[styles.declineBtn, { borderColor }]} onPress={() => declineRequest(item.id)}>
+                      <Text style={[styles.declineBtnText, { color: subText }]}>Decline</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAccept(item)} disabled={acceptingId === item.id}>
                       {acceptingId === item.id ? <ActivityIndicator color={colors.white} /> : <Ionicons name="checkmark" size={16} color={colors.white} />}
@@ -567,42 +592,46 @@ export default function DriverDashboard({ navigation }) {
               )}
               ListEmptyComponent={
                 <View style={styles.empty}>
-                  <Ionicons name="search-outline" size={40} color={colors.border} />
-                  <Text style={styles.emptyTitle}>Listening for requests</Text>
-                  <Text style={styles.emptySub}>Passenger ride and order requests appear here live.</Text>
+                  <View style={[styles.emptyIconBg, { backgroundColor: cardBg }]}>
+                    <Ionicons name="search-outline" size={32} color={subText} />
+                  </View>
+                  <Text style={[styles.emptyTitle, { color: textColor }]}>Listening for requests</Text>
+                  <Text style={[styles.emptySub, { color: subText }]}>Passenger ride and order requests appear here live.</Text>
                 </View>
               }
             />
           </>
         ) : (
           <View style={styles.offline}>
-            <Ionicons name="power-outline" size={52} color={colors.border} />
-            <Text style={styles.offlineTitle}>You are offline</Text>
-            <Text style={styles.offlineSub}>Go online to receive live ride, food, delivery, and cargo requests.</Text>
+            <View style={[styles.emptyIconBg, { backgroundColor: cardBg }]}>
+              <Ionicons name="power-outline" size={40} color={subText} />
+            </View>
+            <Text style={[styles.offlineTitle, { color: textColor }]}>You are offline</Text>
+            <Text style={[styles.offlineSub, { color: subText }]}>Go online to receive live ride, food, delivery, and cargo requests.</Text>
           </View>
         )}
       </Animated.View>
 
       <Modal visible={showPayment} transparent animationType="slide" onRequestClose={() => setShowPayment(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.paySheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.payTitle}>Confirm Payment</Text>
-            <Text style={styles.paySub}>Complete this {serviceLabel(activeRequest?.serviceType).toLowerCase()} for ZK {activeRequest?.fare}</Text>
+          <View style={[styles.paySheet, { backgroundColor: cardBg }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: borderColor }]} />
+            <Text style={[styles.payTitle, { color: textColor }]}>Confirm Payment</Text>
+            <Text style={[styles.paySub, { color: subText }]}>Complete this {serviceLabel(activeRequest?.serviceType).toLowerCase()} for ZK {activeRequest?.fare}</Text>
             {PAYMENT_OPTIONS.map((method) => (
               <TouchableOpacity
                 key={method.id}
-                style={[styles.payOption, selectedPayment === method.id && styles.payOptionSelected]}
+                style={[styles.payOption, { borderColor }, selectedPayment === method.id && styles.payOptionSelected]}
                 onPress={() => setSelectedPayment(method.id)}
               >
                 <View style={[styles.payOptionIcon, { backgroundColor: selectedPayment === method.id ? colors.primary : colors.primaryGhost }]}>
                   <Ionicons name={method.icon} size={20} color={selectedPayment === method.id ? colors.white : colors.primary} />
                 </View>
-                <Text style={[styles.payOptionText, selectedPayment === method.id && { color: colors.primary, fontWeight: '800' }]}>{method.label}</Text>
+                <Text style={[styles.payOptionText, { color: textColor }, selectedPayment === method.id && { color: colors.primary, fontWeight: '800' }]}>{method.label}</Text>
                 {selectedPayment === method.id && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
               </TouchableOpacity>
             ))}
-            <Text style={styles.rateLabel}>Rate this passenger</Text>
+            <Text style={[styles.rateLabel, { color: textColor }]}>Rate this passenger</Text>
             <View style={styles.rateStars}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <TouchableOpacity key={n} onPress={() => setPassengerRatingInput(n)}>
@@ -619,7 +648,7 @@ export default function DriverDashboard({ navigation }) {
               <Text style={styles.confirmPayBtnText}>Complete Request</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowPayment(false)} style={styles.closePayBtn}>
-              <Text style={styles.closePayText}>Back</Text>
+              <Text style={[styles.closePayText, { color: subText }]}>Back</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -629,106 +658,123 @@ export default function DriverDashboard({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.offWhite },
+  container: { flex: 1 },
   mapContainer: { height: 220, position: 'relative' },
   map: { flex: 1 },
   navBanner: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   navBannerText: { flex: 1, color: colors.white, fontSize: 13, fontWeight: '800' },
   navBannerEta: { color: 'rgba(255,255,255,0.82)', fontSize: 12 },
   pickupMarker: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.white },
-  header: { backgroundColor: colors.charcoal, paddingTop: 54, paddingHorizontal: 20, paddingBottom: 22, overflow: 'hidden' },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 },
+
+  header: {
+    backgroundColor: colors.charcoal, paddingTop: 54, paddingHorizontal: 20, paddingBottom: 24,
+    borderBottomLeftRadius: radius.xxl, borderBottomRightRadius: radius.xxl, overflow: 'hidden',
+  },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   driverIntro: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   avatar: { backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  avatarRing: { borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   greeting: { fontSize: 12, color: '#8B949E', fontWeight: '600', marginBottom: 2 },
-  driverName: { fontSize: 19, fontWeight: '800', color: colors.white },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2D333B', borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 6 },
-  statusOnline: { backgroundColor: 'rgba(26,127,55,0.2)' },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#8B949E' },
+  driverName: { fontSize: 18, fontWeight: '800', color: colors.white },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2D333B', borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 8 },
+  statusPillOn: { backgroundColor: 'rgba(26,127,55,0.2)' },
+  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#8B949E' },
   statusDotOn: { backgroundColor: colors.success },
   statusText: { fontSize: 12, fontWeight: '700', color: '#8B949E' },
-  earningsCard: { flexDirection: 'row', backgroundColor: '#2D333B', borderRadius: radius.xl, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#444C56' },
-  earningItem: { flex: 1, alignItems: 'center' },
-  earningVal: { fontSize: 18, fontWeight: '800', color: colors.white },
-  earningLbl: { fontSize: 10, color: '#8B949E', marginTop: 2, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  earningDiv: { width: 1, backgroundColor: '#444C56', marginVertical: 4 },
-  onlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.lg, padding: 14, gap: 8, ...shadows.green },
+
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  statCard: { flex: 1, backgroundColor: '#22282F', borderRadius: radius.lg, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333A42' },
+  statIconBg: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(45,147,84,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  statVal: { fontSize: 15, fontWeight: '800', color: colors.white },
+  statLbl: { fontSize: 9.5, color: '#8B949E', marginTop: 2, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  onlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.lg, padding: 15, gap: 8, ...shadows.green },
   offlineBtn: { backgroundColor: colors.error, shadowColor: colors.error },
   onlineBtnText: { color: colors.white, fontSize: 16, fontWeight: '800' },
-  filterList: { gap: 8, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.borderLight },
+
+  filterList: { gap: 8, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.full, paddingHorizontal: 13, paddingVertical: 9, borderWidth: 1 },
   filterChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterText: { fontSize: 12, color: colors.primary, fontWeight: '800' },
+  filterText: { fontSize: 12, color: colors.primaryLight, fontWeight: '800' },
   filterTextOn: { color: colors.white },
-  requestsTitle: { fontSize: 14, color: colors.textSecondary, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, fontWeight: '600' },
-  requestsCount: { fontSize: 20, fontWeight: '900', color: colors.textPrimary },
+  requestsTitle: { fontSize: 14, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, fontWeight: '600' },
+  requestsCount: { fontSize: 20, fontWeight: '900' },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
-  rideCard: { backgroundColor: colors.white, borderRadius: radius.lg, padding: 16, marginBottom: 12, ...shadows.small },
+
+  rideCard: { borderRadius: radius.xl, padding: 16, marginBottom: 12, borderWidth: 1, ...shadows.small },
   passengerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  passengerLabel: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+  svcIconBg: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  passengerLabel: { fontSize: 14, fontWeight: '800' },
   requestTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  requestType: { fontSize: 12, color: colors.primary, fontWeight: '800' },
-  requestTypeSmall: { fontSize: 11, color: colors.primary, fontWeight: '800' },
-  requestFare: { fontSize: 18, color: colors.primary, fontWeight: '900' },
+  requestType: { fontSize: 12, color: colors.primaryLight, fontWeight: '800' },
+  requestTypeSmall: { fontSize: 11, color: colors.primaryLight, fontWeight: '800', marginTop: 2 },
+  requestFare: { fontSize: 18, color: colors.primaryLight, fontWeight: '900' },
   rideRoute: { flexDirection: 'row', marginBottom: 10 },
   routeDots: { width: 16, alignItems: 'center', marginRight: 10, paddingTop: 3 },
-  routeDotGreen: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
-  routeLine: { width: 1.5, height: 20, backgroundColor: colors.border, marginVertical: 2 },
+  routeDotGreen: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primaryLight },
+  routeLine: { width: 1.5, height: 20, marginVertical: 2 },
   routeDotRed: { width: 8, height: 8, borderRadius: 2, backgroundColor: colors.error },
   routeLabels: { flex: 1, justifyContent: 'space-between' },
-  routePickupText: { fontSize: 12, color: colors.textSecondary, marginBottom: 12 },
-  routeDestText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  routePickupText: { fontSize: 12, marginBottom: 12 },
+  routeDestText: { fontSize: 15, fontWeight: '700' },
   readyBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.successLight, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start', marginBottom: 6 },
   readyBadgeText: { fontSize: 10, fontWeight: '900', color: colors.success, letterSpacing: 0.5 },
-  orderPreview: { fontSize: 12, color: colors.textSecondary, backgroundColor: colors.offWhite, borderRadius: radius.sm, padding: 8, marginBottom: 8 },
-  rideMeta: { flexDirection: 'row', gap: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.borderLight },
+  orderPreview: { fontSize: 12, borderRadius: radius.sm, padding: 8, marginBottom: 8 },
+  rideMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingVertical: 10, borderTopWidth: 1 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 12, fontWeight: '700' },
   rideActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  declineBtn: { flex: 1, padding: 11, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center' },
-  declineBtnText: { fontSize: 14, fontWeight: '800', color: colors.textSecondary },
-  acceptBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.md, padding: 11, gap: 6, ...shadows.green },
+  declineBtn: { flex: 1, padding: 12, borderRadius: radius.full, borderWidth: 1.5, alignItems: 'center' },
+  declineBtnText: { fontSize: 14, fontWeight: '800' },
+  acceptBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.full, padding: 12, gap: 6, ...shadows.green },
   acceptBtnText: { fontSize: 14, fontWeight: '800', color: colors.white },
-  activeRidePanel: { backgroundColor: colors.white, margin: 16, borderRadius: radius.xl, padding: 16, ...shadows.medium },
-  activeRideHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  passengerName: { fontSize: 16, fontWeight: '900', color: colors.textPrimary },
+
+  activeRidePanel: { margin: 16, borderRadius: radius.xxl, padding: 18, borderWidth: 1, ...shadows.medium },
+  activeRideHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  passengerName: { fontSize: 16, fontWeight: '900' },
   ratingRow: { flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 3 },
   passengerRating: { fontSize: 12, color: '#9A6700', fontWeight: '700' },
-  rideFare: { fontSize: 18, fontWeight: '900', color: colors.primary },
-  rideDistance: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  routeInfo: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 2 },
-  routePickup: { flex: 1, fontSize: 13, color: colors.textSecondary },
-  routeDest: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-  foodItems: { backgroundColor: colors.offWhite, borderRadius: radius.md, padding: 10, marginTop: 12 },
-  foodItemText: { fontSize: 13, color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
-  contactActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  contactBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 11, backgroundColor: colors.primaryGhost },
-  contactBtnText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
-  activeActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  cancelActiveBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.error, borderRadius: radius.md },
+  rideFare: { fontSize: 18, fontWeight: '900', color: colors.primaryLight },
+  rideDistance: { fontSize: 12, marginTop: 2 },
+  routeCard: { borderRadius: radius.lg, padding: 12, marginBottom: 4 },
+  routeInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  routeConnector: { width: 1.5, height: 14, backgroundColor: colors.border, marginLeft: 3.5, marginVertical: 2 },
+  routePickup: { flex: 1, fontSize: 13 },
+  routeDest: { flex: 1, fontSize: 15, fontWeight: '800' },
+  foodItems: { borderRadius: radius.md, padding: 10, marginTop: 12 },
+  foodItemText: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
+  contactActions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 16 },
+  iconActionBtn: { alignItems: 'center', gap: 6 },
+  iconActionCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryGhost, alignItems: 'center', justifyContent: 'center' },
+  iconActionText: { fontSize: 11, fontWeight: '700' },
+  activeActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  cancelActiveBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.error, borderRadius: radius.full },
   cancelActiveText: { color: colors.error, fontSize: 14, fontWeight: '800' },
-  completeBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.md, padding: 14, gap: 8, ...shadows.green },
+  completeBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.full, padding: 14, gap: 8, ...shadows.green },
   completeBtnText: { color: colors.white, fontSize: 15, fontWeight: '800' },
+
   empty: { alignItems: 'center', paddingTop: 40 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginTop: 14 },
-  emptySub: { fontSize: 13, color: colors.textSecondary, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 },
+  emptyIconBg: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 14, ...shadows.xs },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 2 },
+  emptySub: { fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 },
   offline: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  offlineTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, marginTop: 16 },
-  offlineSub: { fontSize: 13, color: colors.textSecondary, marginTop: 6, textAlign: 'center', paddingHorizontal: 40 },
+  offlineTitle: { fontSize: 18, fontWeight: '800', marginTop: 4 },
+  offlineSub: { fontSize: 13, marginTop: 6, textAlign: 'center', paddingHorizontal: 40 },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  paySheet: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  sheetHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  payTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
-  paySub: { fontSize: 13, color: colors.textSecondary, marginBottom: 20 },
-  payOption: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border, marginBottom: 10 },
+  paySheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  payTitle: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
+  paySub: { fontSize: 13, marginBottom: 20 },
+  payOption: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: radius.lg, borderWidth: 1.5, marginBottom: 10 },
   payOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryGhost },
   payOptionIcon: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center' },
-  payOptionText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  rateLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginTop: 4, marginBottom: 8 },
+  payOptionText: { flex: 1, fontSize: 15, fontWeight: '600' },
+  rateLabel: { fontSize: 13, fontWeight: '700', marginTop: 4, marginBottom: 8 },
   rateStars: { flexDirection: 'row', marginBottom: 16 },
   confirmPayBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 15, alignItems: 'center', marginTop: 8, ...shadows.green },
   confirmPayBtnText: { color: colors.white, fontSize: 16, fontWeight: '800' },
   closePayBtn: { alignItems: 'center', paddingVertical: 14 },
-  closePayText: { color: colors.textSecondary, fontWeight: '700' },
+  closePayText: { fontWeight: '700' },
 });

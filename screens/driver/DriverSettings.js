@@ -17,7 +17,7 @@ import { watchDriverCompletedRequests } from '../../services/requestService';
 
 export default function DriverSettings() {
   const { profile } = useUserProfile();
-  const { notifications, setNotifications } = useAppContext();
+  const { notifications, setNotifications, darkMode, setDarkMode } = useAppContext();
   const [completedCount, setCompletedCount] = useState(0);
   const [autoAccept, setAutoAccept] = useState(false);
   const [showEarnings, setShowEarnings] = useState(true);
@@ -105,6 +105,13 @@ export default function DriverSettings() {
     Alert.alert('Pricing Updated', `Min: ZK ${minFare} · Max: ZK ${maxFare}`);
   };
 
+  const bg         = darkMode ? colors.black : colors.offWhite;
+  const cardBg     = darkMode ? colors.darkCard : colors.white;
+  const borderColor= darkMode ? colors.darkBorder : colors.borderLight;
+  const textColor  = darkMode ? colors.textOnDark : colors.textPrimary;
+  const subText    = darkMode ? colors.textTertiary : colors.textSecondary;
+  const inputBg    = darkMode ? colors.darkSurface : colors.offWhite;
+
   const sections = [
     {
       title: 'DRIVER PROFILE',
@@ -112,6 +119,12 @@ export default function DriverSettings() {
         { icon: 'person-outline', label: fullName || 'Driver profile', sub: 'Driver account', type: 'action', onPress: () => setShowEditProfile(true) },
         { icon: 'car-outline', label: vehicleModel || 'Vehicle details', sub: licensePlate || 'Add license plate', type: 'action', onPress: () => setShowEditProfile(true) },
         { icon: 'star-outline', label: `Rating: ${profile?.rating || 5}`, sub: `${completedCount} trip${completedCount === 1 ? '' : 's'} completed`, type: 'info' },
+      ],
+    },
+    {
+      title: 'DISPLAY',
+      items: [
+        { icon: 'moon-outline', label: 'Dark Mode', sub: 'Switch to a dark theme', type: 'switch', value: darkMode, onChange: setDarkMode },
       ],
     },
     {
@@ -141,7 +154,7 @@ export default function DriverSettings() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bg }]}>
       <StatusBar barStyle="light-content" backgroundColor={colors.charcoal} />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Driver Settings</Text>
@@ -151,8 +164,8 @@ export default function DriverSettings() {
       <Animated.ScrollView style={{ opacity: fadeAnim }} contentContainerStyle={styles.content}>
         {sections.map((section, si) => (
           <View key={si} style={styles.section}>
-            <Text style={styles.sectionLabel}>{section.title}</Text>
-            <View style={styles.card}>
+            <Text style={[styles.sectionLabel, { color: subText }]}>{section.title}</Text>
+            <View style={[styles.card, { backgroundColor: cardBg }]}>
               {section.items.map((item, ii) => (
                 <View key={ii}>
                   <TouchableOpacity
@@ -160,24 +173,24 @@ export default function DriverSettings() {
                     onPress={item.type === 'action' ? item.onPress : undefined}
                     activeOpacity={item.type === 'action' ? 0.7 : 1}
                   >
-                    <View style={styles.iconBg}>
-                      <Ionicons name={item.icon} size={16} color={colors.primary} />
+                    <View style={[styles.iconBg, { backgroundColor: darkMode ? colors.darkSurface : colors.primaryGhost }]}>
+                      <Ionicons name={item.icon} size={16} color={colors.primaryLight} />
                     </View>
                     <View style={styles.rowContent}>
-                      <Text style={styles.rowLabel}>{item.label}</Text>
-                      {item.sub && <Text style={styles.rowSub}>{item.sub}</Text>}
+                      <Text style={[styles.rowLabel, { color: textColor }]}>{item.label}</Text>
+                      {item.sub && <Text style={[styles.rowSub, { color: subText }]}>{item.sub}</Text>}
                     </View>
                     {item.type === 'switch' && <Switch value={item.value} onValueChange={item.onChange} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.white} />}
-                    {item.type === 'action' && <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
-                    {item.type === 'value' && <Text style={styles.valueText}>{item.value}</Text>}
+                    {item.type === 'action' && <Ionicons name="chevron-forward" size={16} color={subText} />}
+                    {item.type === 'value' && <Text style={[styles.valueText, { color: subText }]}>{item.value}</Text>}
                   </TouchableOpacity>
-                  {ii < section.items.length - 1 && <View style={styles.divider} />}
+                  {ii < section.items.length - 1 && <View style={[styles.divider, { backgroundColor: borderColor }]} />}
                 </View>
               ))}
             </View>
           </View>
         ))}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <TouchableOpacity style={[styles.logoutBtn, { backgroundColor: cardBg }]} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={18} color={colors.error} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
@@ -186,9 +199,9 @@ export default function DriverSettings() {
       {/* Edit Profile Modal */}
       <Modal visible={showEditProfile} transparent animationType="slide" onRequestClose={() => setShowEditProfile(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.modalTitle}>Edit Driver Profile</Text>
+          <View style={[styles.modalSheet, { backgroundColor: cardBg }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: borderColor }]} />
+            <Text style={[styles.modalTitle, { color: textColor }]}>Edit Driver Profile</Text>
 
             {/* Avatar */}
             <View style={styles.avatarSection}>
@@ -199,7 +212,7 @@ export default function DriverSettings() {
                 onPress={handlePhotoUpload}
                 loading={uploadingPhoto}
               />
-              <Text style={styles.avatarHint}>Tap to change photo</Text>
+              <Text style={[styles.avatarHint, { color: subText }]}>Tap to change photo</Text>
             </View>
 
             {[
@@ -209,16 +222,17 @@ export default function DriverSettings() {
               { label: 'LICENSE PLATE', value: licensePlate, onChange: setLicensePlate, icon: 'id-card-outline' },
             ].map((f, i) => (
               <View key={i} style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{f.label}</Text>
-                <View style={styles.fieldRow}>
-                  <Ionicons name={f.icon} size={16} color={colors.textTertiary} style={{ marginLeft: 12 }} />
+                <Text style={[styles.fieldLabel, { color: subText }]}>{f.label}</Text>
+                <View style={[styles.fieldRow, { backgroundColor: inputBg, borderColor }]}>
+                  <Ionicons name={f.icon} size={16} color={subText} style={{ marginLeft: 12 }} />
                   <TextInput
-                    style={styles.fieldInput}
+                    style={[styles.fieldInput, { color: textColor }]}
                     value={f.value}
                     onChangeText={f.onChange}
                     keyboardType={f.keyboard || 'default'}
                     returnKeyType="next"
                     blurOnSubmit={false}
+                    placeholderTextColor={subText}
                   />
                 </View>
               </View>
@@ -227,7 +241,7 @@ export default function DriverSettings() {
               <Text style={styles.saveBtnText}>{savingProfile ? 'Saving...' : 'Save Profile'}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowEditProfile(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: subText }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -236,19 +250,19 @@ export default function DriverSettings() {
       {/* Pricing Modal */}
       <Modal visible={showPricing} transparent animationType="slide" onRequestClose={() => setShowPricing(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.modalTitle}>Set Your Fare Range</Text>
-            <Text style={styles.modalSub}>Only accept rides within this price range</Text>
+          <View style={[styles.modalSheet, { backgroundColor: cardBg }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: borderColor }]} />
+            <Text style={[styles.modalTitle, { color: textColor }]}>Set Your Fare Range</Text>
+            <Text style={[styles.modalSub, { color: subText }]}>Only accept rides within this price range</Text>
             {[
               { label: 'MINIMUM FARE (ZK)', value: minFare, onChange: setMinFare },
               { label: 'MAXIMUM FARE (ZK)', value: maxFare, onChange: setMaxFare },
             ].map((f, i) => (
               <View key={i} style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{f.label}</Text>
-                <View style={styles.fieldRow}>
+                <Text style={[styles.fieldLabel, { color: subText }]}>{f.label}</Text>
+                <View style={[styles.fieldRow, { backgroundColor: inputBg, borderColor }]}>
                   <Text style={styles.currencyBadge}>ZK</Text>
-                  <TextInput style={styles.fieldInput} value={f.value} onChangeText={f.onChange} keyboardType="numeric" returnKeyType="done" />
+                  <TextInput style={[styles.fieldInput, { color: textColor }]} value={f.value} onChangeText={f.onChange} keyboardType="numeric" returnKeyType="done" />
                 </View>
               </View>
             ))}
@@ -256,7 +270,7 @@ export default function DriverSettings() {
               <Text style={styles.saveBtnText}>Save Pricing</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowPricing(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: subText }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -265,9 +279,9 @@ export default function DriverSettings() {
       {/* Support Modal */}
       <Modal visible={showSupport} transparent animationType="slide" onRequestClose={() => setShowSupport(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.modalTitle}>Driver Help Centre</Text>
+          <View style={[styles.modalSheet, { backgroundColor: cardBg }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: borderColor }]} />
+            <Text style={[styles.modalTitle, { color: textColor }]}>Driver Help Centre</Text>
             {[
               { q: 'How do I increase my rating?', a: 'Be punctual, keep your vehicle clean, and be polite to passengers.' },
               { q: 'What if a passenger cancels?', a: 'Cancellations within 2 minutes are free. After that you earn a ZK 5 cancellation fee.' },
@@ -275,14 +289,14 @@ export default function DriverSettings() {
               { q: 'Can I reject a ride?', a: 'Yes, but frequent rejections may lower your priority in ride matching.' },
               { q: 'How do I report an incident?', a: 'Use the Report Issue button on the ride card or contact support directly.' },
             ].map((item, i) => (
-              <TouchableOpacity key={i} style={styles.faqItem} onPress={() => Alert.alert(item.q, item.a)}>
-                <Ionicons name="help-circle-outline" size={18} color={colors.primary} />
-                <Text style={styles.faqText}>{item.q}</Text>
-                <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} />
+              <TouchableOpacity key={i} style={[styles.faqItem, { borderBottomColor: borderColor }]} onPress={() => Alert.alert(item.q, item.a)}>
+                <Ionicons name="help-circle-outline" size={18} color={colors.primaryLight} />
+                <Text style={[styles.faqText, { color: textColor }]}>{item.q}</Text>
+                <Ionicons name="chevron-forward" size={14} color={subText} />
               </TouchableOpacity>
             ))}
             <TouchableOpacity onPress={() => setShowSupport(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Close</Text>
+              <Text style={[styles.cancelText, { color: subText }]}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>

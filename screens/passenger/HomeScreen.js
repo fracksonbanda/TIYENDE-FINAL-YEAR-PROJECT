@@ -211,10 +211,21 @@ export default function HomeScreen({ navigation }) {
       const offset    = { pending: 10, accepted: 6, arrived: 0, in_progress: 0 }[activeRequest.status] ?? 5;
       setEtaMin(Math.max(1, duration + offset));
     } else if (!activeRequest && view === 'tracking') {
-      if (lastTripRef.current) {
-        setTripRating(0);
-        setRatingDone(false);
-        setShowReceipt(true);
+      const finishedTrip = lastTripRef.current;
+      if (finishedTrip) {
+        // The trip just dropped out of the active-status query, which happens
+        // on both completion AND cancellation — read its real final status
+        // before deciding whether "Trip Complete" is actually true.
+        getDoc(doc(db, 'serviceRequests', finishedTrip.id)).then((snap) => {
+          const finalStatus = snap.exists() ? snap.data().status : null;
+          if (finalStatus === 'completed') {
+            setTripRating(0);
+            setRatingDone(false);
+            setShowReceipt(true);
+          } else if (finalStatus === 'cancelled') {
+            Alert.alert('Ride Cancelled', 'This ride was cancelled.');
+          }
+        }).catch(() => {});
       }
       setView('home');
       setEtaMin(null);

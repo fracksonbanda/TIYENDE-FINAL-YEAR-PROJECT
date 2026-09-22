@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
 import { updateProfile } from 'firebase/auth';
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -58,16 +59,14 @@ export async function uploadProfileImage(uri) {
   if (!user) throw new Error('You need to sign in first.');
   if (!uri) return null;
 
-  const blob = await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.onload = () => resolve(xhr.response);
-    xhr.onerror = () => reject(new Error('Network error while reading image'));
-    xhr.responseType = 'blob';
-    xhr.open('GET', uri, true);
-    xhr.send(null);
-  });
+  let bytes;
+  try {
+    bytes = await new File(uri).arrayBuffer();
+  } catch {
+    throw new Error('Could not read the selected photo. Please try picking it again.');
+  }
   const imageRef = ref(storage, `profilePhotos/${user.uid}/${Date.now()}.jpg`);
-  await uploadBytes(imageRef, blob, { contentType: 'image/jpeg' });
+  await uploadBytes(imageRef, bytes, { contentType: 'image/jpeg' });
   const photoURL = await getDownloadURL(imageRef);
 
   await saveUserProfile({ photoURL });

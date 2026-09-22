@@ -6,16 +6,41 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../../firebase';
-import { signInAnonymously } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { colors, shadows, radius } from '../../theme';
 
 const { height: H } = Dimensions.get('window');
 
+// Firebase Authentication needs an email + a 6+ character password, but the
+// user only ever sees a username and a 4-digit PIN. The username becomes a
+// deterministic, invisible email; the PIN (padded to meet Firebase's minimum
+// length) becomes the real password, so it still provides real access control.
+const SYNTHETIC_DOMAIN = 'tiyende.app';
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+const PIN_LENGTH = 4;
+
+function usernameToEmail(username) {
+  return `${username.toLowerCase()}@${SYNTHETIC_DOMAIN}`;
+}
+
+function pinToPassword(pin) {
+  return `tiyende-pin-${pin}`;
+}
+
+const ERROR_MESSAGES = {
+  'auth/network-request-failed': 'No internet connection. Please try again.',
+  'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
+  'auth/user-disabled': 'This account has been disabled. Contact support.',
+  'auth/operation-not-allowed': 'Sign-in is not enabled for this app. Contact support.',
+};
+
 export default function LoginScreen() {
-  const [identifier, setIdentifier] = useState('');
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [focused, setFocused] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
@@ -24,6 +49,7 @@ export default function LoginScreen() {
   const feature1  = useRef(new Animated.Value(0)).current;
   const feature2  = useRef(new Animated.Value(0)).current;
   const feature3  = useRef(new Animated.Value(0)).current;
+  const pinRef    = useRef(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -48,27 +74,52 @@ export default function LoginScreen() {
   }, []);
 
   const handleContinue = async () => {
-    const name = identifier.trim();
-    if (!name || name.length < 2) {
-      Alert.alert('Required', 'Please enter your name or phone number to continue.');
+    const cleanUsername = username.trim();
+    if (cleanUsername.length < 3) {
+      Alert.alert('Username Too Short', 'Please use at least 3 characters.');
       return;
     }
+    if (!USERNAME_PATTERN.test(cleanUsername)) {
+      Alert.alert('Invalid Username', 'Letters, numbers, underscores, dots and hyphens only — no spaces.');
+      return;
+    }
+    if (pin.length !== PIN_LENGTH) {
+      Alert.alert('PIN Required', `Please enter your ${PIN_LENGTH}-digit PIN.`);
+      return;
+    }
+
     setLoading(true);
+    const syntheticEmail = usernameToEmail(cleanUsername);
+    const password = pinToPassword(pin);
     try {
-      const { user } = await signInAnonymously(auth);
-      await setDoc(doc(db, 'users', user.uid), {
-        fullName: name,
-        identifier: name,
-        role: 'new',
-        createdAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      const messages = {
-        'auth/operation-not-allowed': 'Anonymous sign-in is not enabled. Contact support.',
-        'auth/network-request-failed': 'No internet connection. Please try again.',
-        'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
-      };
-      Alert.alert('Sign In Failed', messages[error.code] || 'Could not sign you in. Please try again.');
+      // Returning user with the right PIN: this succeeds and their profile is intact.
+      await signInWithEmailAndPassword(auth, syntheticEmail, password);
+    } catch (signInError) {
+      const maybeUnclaimed = ['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(signInError.code);
+      if (!maybeUnclaimed) {
+        Alert.alert('Sign In Failed', ERROR_MESSAGES[signInError.code] || signInError.message);
+        setLoading(false);
+        return;
+      }
+      // Could be a brand-new username, OR an existing username with the wrong
+      // PIN (Firebase collapses both into the same error code for privacy).
+      // Trying to register disambiguates: it only fails as "already in use"
+      // when the username is real and the PIN we just tried was wrong.
+      try {
+        const { user } = await createUserWithEmailAndPassword(auth, syntheticEmail, password);
+        await setDoc(doc(db, 'users', user.uid), {
+          username: cleanUsername,
+          identifier: cleanUsername,
+          role: 'new',
+          createdAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (registerError) {
+        if (registerError.code === 'auth/email-already-in-use') {
+          Alert.alert('Incorrect PIN', 'That username exists but the PIN is wrong. Please try again.');
+        } else {
+          Alert.alert('Could Not Create Account', ERROR_MESSAGES[registerError.code] || registerError.message);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -100,7 +151,6 @@ export default function LoginScreen() {
           <Text style={styles.appTagline}>Your Journey, Your Price</Text>
         </Animated.View>
 
-        {/* Feature pills */}
         <View style={styles.pillRow}>
           {[feature1, feature2, feature3].map((anim, i) => (
             <Animated.View key={i} style={[styles.pill, { opacity: anim }]}>
@@ -117,67 +167,94 @@ export default function LoginScreen() {
 
         <Text style={styles.welcomeTitle}>Welcome aboard</Text>
         <Text style={styles.welcomeSub}>
-          No password needed. Just enter your name or phone number to get started.
+          Pick a username and a {PIN_LENGTH}-digit PIN. Sign back in with the same two anytime and your profile is always here.
         </Text>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>YOUR NAME OR PHONE NUMBER</Text>
-          <View style={[styles.inputRow, focused && styles.inputRowFocused]}>
+          <Text style={styles.fieldLabel}>USERNAME</Text>
+          <View style={[styles.inputRow, focusedField === 'username' && styles.inputRowFocused]}>
             <View style={styles.inputIconWrap}>
               <Ionicons
-                name={focused ? 'person' : 'person-outline'}
+                name={focusedField === 'username' ? 'at' : 'at-outline'}
                 size={18}
-                color={focused ? colors.primary : colors.textTertiary}
+                color={focusedField === 'username' ? colors.primary : colors.textTertiary}
               />
             </View>
             <View style={styles.inputDivider} />
             <TextInput
               style={styles.input}
-              value={identifier}
-              onChangeText={setIdentifier}
-              placeholder="e.g. Frackson or +260971234567"
+              value={username}
+              onChangeText={setUsername}
+              placeholder="e.g. frackson_b"
               placeholderTextColor={colors.textTertiary}
-              autoCapitalize="words"
-              returnKeyType="done"
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onSubmitEditing={handleContinue}
+              autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="next"
+              onFocus={() => setFocusedField('username')}
+              onBlur={() => setFocusedField(null)}
+              onSubmitEditing={() => pinRef.current?.focus()}
             />
-            {identifier.length > 0 && (
-              <TouchableOpacity onPress={() => setIdentifier('')} style={styles.clearBtn}>
-                <Ionicons name="close-circle" size={17} color={colors.textTertiary} />
-              </TouchableOpacity>
-            )}
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>{PIN_LENGTH}-DIGIT PIN</Text>
+          <View style={[styles.inputRow, focusedField === 'pin' && styles.inputRowFocused]}>
+            <View style={styles.inputIconWrap}>
+              <Ionicons
+                name={focusedField === 'pin' ? 'keypad' : 'keypad-outline'}
+                size={18}
+                color={focusedField === 'pin' ? colors.primary : colors.textTertiary}
+              />
+            </View>
+            <View style={styles.inputDivider} />
+            <TextInput
+              ref={pinRef}
+              style={styles.input}
+              value={pin}
+              onChangeText={(t) => setPin(t.replace(/[^0-9]/g, '').slice(0, PIN_LENGTH))}
+              placeholder="••••"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="number-pad"
+              secureTextEntry={!showPin}
+              maxLength={PIN_LENGTH}
+              returnKeyType="done"
+              onFocus={() => setFocusedField('pin')}
+              onBlur={() => setFocusedField(null)}
+              onSubmitEditing={handleContinue}
+            />
+            <TouchableOpacity onPress={() => setShowPin((v) => !v)} style={styles.clearBtn}>
+              <Ionicons name={showPin ? 'eye-off-outline' : 'eye-outline'} size={17} color={colors.textTertiary} />
+            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.securityRow}>
           <View style={styles.securityBadge}>
-            <Ionicons name="lock-closed" size={11} color={colors.primary} />
-            <Text style={styles.securityText}>Secure &amp; private</Text>
+            <Ionicons name="save" size={11} color={colors.primary} />
+            <Text style={styles.securityText}>Profile always saved</Text>
           </View>
           <View style={styles.securityBadge}>
             <Ionicons name="flash" size={11} color={colors.primary} />
             <Text style={styles.securityText}>Instant access</Text>
           </View>
           <View style={styles.securityBadge}>
-            <Ionicons name="checkmark-circle" size={11} color={colors.primary} />
-            <Text style={styles.securityText}>No password</Text>
+            <Ionicons name="lock-closed" size={11} color={colors.primary} />
+            <Text style={styles.securityText}>PIN protected</Text>
           </View>
         </View>
 
         <TouchableOpacity
-          style={[styles.primaryBtn, (loading || identifier.trim().length < 2) && styles.primaryBtnDisabled]}
+          style={[styles.primaryBtn, (loading || username.trim().length < 3 || pin.length !== PIN_LENGTH) && styles.primaryBtnDisabled]}
           onPress={handleContinue}
           activeOpacity={0.85}
-          disabled={loading || identifier.trim().length < 2}
+          disabled={loading || username.trim().length < 3 || pin.length !== PIN_LENGTH}
         >
           {loading ? (
             <Text style={styles.primaryBtnText}>Please wait…</Text>
           ) : (
             <>
-              <Text style={styles.primaryBtnText}>Get Started</Text>
+              <Text style={styles.primaryBtnText}>Continue</Text>
               <View style={styles.btnArrow}>
                 <Ionicons name="arrow-forward" size={16} color={colors.primary} />
               </View>
@@ -254,7 +331,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
     paddingHorizontal: 28, paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 48 : 36,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
     ...shadows.large,
   },
   sheetHandle: {
@@ -262,7 +339,7 @@ const styles = StyleSheet.create({
     borderRadius: 2, alignSelf: 'center', marginBottom: 22,
   },
   welcomeTitle: { fontSize: 24, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
-  welcomeSub: { fontSize: 14, color: colors.textSecondary, lineHeight: 21, marginBottom: 24 },
+  welcomeSub: { fontSize: 14, color: colors.textSecondary, lineHeight: 21, marginBottom: 22 },
 
   fieldGroup: { marginBottom: 14 },
   fieldLabel: {
@@ -285,7 +362,7 @@ const styles = StyleSheet.create({
   },
   clearBtn: { paddingHorizontal: 12 },
 
-  securityRow: { flexDirection: 'row', gap: 8, marginBottom: 22, flexWrap: 'wrap' },
+  securityRow: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
   securityBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: colors.primaryGhost, borderRadius: radius.full,
