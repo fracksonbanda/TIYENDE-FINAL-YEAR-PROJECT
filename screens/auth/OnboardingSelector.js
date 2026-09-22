@@ -170,10 +170,10 @@ export default function OnboardingSelector({ navigation }) {
     },
     {
       id: 'restaurant',
-      icon: 'restaurant',
-      title: 'List Your Restaurant',
-      desc: 'Add your menu, set prices, manage food orders in real time, and reach customers on Tiyende.',
-      tags: ['Menu management', 'Live orders', 'Own discounts'],
+      icon: 'storefront',
+      title: 'Sell on Tiyende',
+      desc: 'List a restaurant or a store — manage your catalog, orders and discounts, and reach customers on Tiyende.',
+      tags: ['Restaurant or store', 'Live orders', 'Own discounts'],
       bg: colors.white,
       textColor: colors.textPrimary,
       tagBg: '#FFF3E0',
@@ -326,7 +326,7 @@ export default function OnboardingSelector({ navigation }) {
             <ActivityIndicator color={colors.primary} size="small" />
             <Text style={styles.loadingText}>
               {loadingRole === 'driver' ? 'Setting up your driver account…'
-                : loadingRole === 'restaurant' ? 'Starting your restaurant setup…'
+                : loadingRole === 'restaurant' ? 'Starting your business setup…'
                 : 'Setting up your account…'}
             </Text>
           </View>

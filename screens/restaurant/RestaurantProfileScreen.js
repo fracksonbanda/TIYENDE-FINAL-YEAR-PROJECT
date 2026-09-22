@@ -22,6 +22,16 @@ const CUISINE_OPTIONS = [
   { id: 'other', label: 'Other' },
 ];
 
+const STORE_CATEGORIES = [
+  { id: 'grocery', label: 'Groceries & Foodstuffs' },
+  { id: 'electronics', label: 'Electronics & Gadgets' },
+  { id: 'fashion', label: 'Clothing & Fashion' },
+  { id: 'hardware', label: 'Hardware & Home' },
+  { id: 'pharmacy', label: 'Pharmacy & Health' },
+  { id: 'beauty', label: 'Beauty & Cosmetics' },
+  { id: 'other', label: 'Other' },
+];
+
 export default function RestaurantProfileScreen() {
   const { darkMode, setDarkMode } = useAppContext();
   const [restaurant, setRestaurant] = useState(null);
@@ -34,6 +44,8 @@ export default function RestaurantProfileScreen() {
   const [logoBase64, setLogo]       = useState('');
   const [saving, setSaving]         = useState(false);
   const uid = auth.currentUser?.uid;
+  const isStore = restaurant?.businessType === 'store';
+  const CATEGORY_OPTIONS = isStore ? STORE_CATEGORIES : CUISINE_OPTIONS;
 
   useEffect(() => {
     if (!uid) return;
@@ -112,7 +124,7 @@ export default function RestaurantProfileScreen() {
         <StatusBar barStyle="light-content" backgroundColor={colors.charcoal} />
         <View style={styles.header}>
           <Text style={styles.headerSub}>Account</Text>
-          <Text style={styles.headerTitle}>Restaurant Profile</Text>
+          <Text style={styles.headerTitle}>{isStore ? 'Store Profile' : 'Restaurant Profile'}</Text>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -122,7 +134,7 @@ export default function RestaurantProfileScreen() {
               <Image source={{ uri: logoBase64 }} style={styles.logoImg} />
             ) : (
               <View style={styles.logoPlaceholder}>
-                <Ionicons name="restaurant-outline" size={28} color={colors.primary} />
+                <Ionicons name={isStore ? 'storefront-outline' : 'restaurant-outline'} size={28} color={colors.primary} />
               </View>
             )}
             <View style={styles.logoEdit}>
@@ -135,7 +147,7 @@ export default function RestaurantProfileScreen() {
             <View style={styles.settingLeft}>
               <Ionicons name={restaurant?.isOpen ? 'storefront' : 'storefront-outline'} size={20} color={restaurant?.isOpen ? colors.success : colors.error} />
               <View>
-                <Text style={[styles.settingTitle, { color: textColor }]}>Restaurant Status</Text>
+                <Text style={[styles.settingTitle, { color: textColor }]}>{isStore ? 'Store Status' : 'Restaurant Status'}</Text>
                 <Text style={[styles.settingDesc, { color: subText }]}>{restaurant?.isOpen ? 'You are accepting orders' : 'Not accepting orders right now'}</Text>
               </View>
             </View>
@@ -146,8 +158,8 @@ export default function RestaurantProfileScreen() {
           <View style={[styles.card, { backgroundColor: cardBg }]}>
             <Text style={styles.cardTitle}>Basic Info</Text>
 
-            <FieldRow label="RESTAURANT NAME" icon="restaurant-outline">
-              <TextInput style={[styles.input, { color: textColor, backgroundColor: inputBg, borderColor }]} value={name} onChangeText={setName} placeholder="Restaurant name" placeholderTextColor={colors.textTertiary} />
+            <FieldRow label={isStore ? 'STORE NAME' : 'RESTAURANT NAME'} icon={isStore ? 'storefront-outline' : 'restaurant-outline'}>
+              <TextInput style={[styles.input, { color: textColor, backgroundColor: inputBg, borderColor }]} value={name} onChangeText={setName} placeholder={isStore ? 'Store name' : 'Restaurant name'} placeholderTextColor={colors.textTertiary} />
             </FieldRow>
 
             <FieldRow label="ADDRESS" icon="location-outline">
@@ -163,15 +175,15 @@ export default function RestaurantProfileScreen() {
             </FieldRow>
 
             <FieldRow label="ABOUT" icon="information-circle-outline">
-              <TextInput style={[styles.input, styles.textArea, { color: textColor, backgroundColor: inputBg, borderColor }]} value={description} onChangeText={setDesc} placeholder="Describe your restaurant..." placeholderTextColor={colors.textTertiary} multiline />
+              <TextInput style={[styles.input, styles.textArea, { color: textColor, backgroundColor: inputBg, borderColor }]} value={description} onChangeText={setDesc} placeholder={isStore ? 'Describe your store...' : 'Describe your restaurant...'} placeholderTextColor={colors.textTertiary} multiline />
             </FieldRow>
           </View>
 
-          {/* Cuisine */}
+          {/* Category */}
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={styles.cardTitle}>Cuisine Type</Text>
+            <Text style={styles.cardTitle}>{isStore ? 'Store Category' : 'Cuisine Type'}</Text>
             <View style={styles.cuisineWrap}>
-              {CUISINE_OPTIONS.map((opt) => (
+              {CATEGORY_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.id}
                   style={[styles.cuisineChip, cuisineType === opt.id && styles.cuisineChipOn]}

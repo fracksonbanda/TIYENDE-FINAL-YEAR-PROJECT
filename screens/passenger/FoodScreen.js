@@ -162,6 +162,9 @@ export default function FoodScreen({ navigation }) {
   const [error, setError]                               = useState('');
   const [search, setSearch]                             = useState('');
 
+  // Restaurant vs. store filter
+  const [businessFilter, setBusinessFilter] = useState('restaurant'); // 'restaurant' | 'store'
+
   // Selected restaurant
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
 
@@ -228,12 +231,20 @@ export default function FoodScreen({ navigation }) {
   }, []);
 
   const restaurants = useMemo(() => {
-    // Firestore restaurants first, then OSM
+    // Firestore restaurants first, then OSM. OSM listings never carry a
+    // businessType (Overpass only returns food places), so they always
+    // count as restaurants rather than dropping out of both filters.
     const all = [...firestoreRestaurants, ...osmRestaurants];
+    const byType = all.filter((r) => (businessFilter === 'store' ? r.businessType === 'store' : r.businessType !== 'store'));
     const term = search.trim().toLowerCase();
-    if (!term) return all;
-    return all.filter((r) => r.name.toLowerCase().includes(term) || (r.cuisine || '').toLowerCase().includes(term));
-  }, [firestoreRestaurants, osmRestaurants, search]);
+    if (!term) return byType;
+    return byType.filter((r) => r.name.toLowerCase().includes(term) || (r.cuisine || '').toLowerCase().includes(term));
+  }, [firestoreRestaurants, osmRestaurants, search, businessFilter]);
+
+  const selectBusinessFilter = (value) => {
+    setBusinessFilter(value);
+    setSelectedRestaurant(null); // clears cart/menu state via the effect below
+  };
 
   const loading = osmLoading && firestoreRestaurants.length === 0 && osmRestaurants.length === 0;
 
@@ -464,12 +475,14 @@ export default function FoodScreen({ navigation }) {
     return (
       <View style={[styles.container, { backgroundColor: bg }]}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('HomeMain')}>
-            <Ionicons name="arrow-back" size={22} color={colors.white} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Order Tracking</Text>
-            <Text style={styles.headerSub}>{orderTracking.restaurantName}</Text>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('HomeMain')}>
+              <Ionicons name="arrow-back" size={22} color={colors.white} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle}>Order Tracking</Text>
+              <Text style={styles.headerSub}>{orderTracking.restaurantName}</Text>
+            </View>
           </View>
         </View>
 
@@ -624,24 +637,50 @@ export default function FoodScreen({ navigation }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.container, { backgroundColor: bg }]}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color={colors.white} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Order Food</Text>
-            <Text style={styles.headerSub}>Browse menus · App & restaurant promo codes</Text>
-          </View>
-          {totalCartQty > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{totalCartQty}</Text>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={22} color={colors.white} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle}>{businessFilter === 'store' ? 'Shop' : 'Order Food'}</Text>
+              <Text style={styles.headerSub}>
+                {businessFilter === 'store' ? 'Browse stores · App & store promo codes' : 'Browse menus · App & restaurant promo codes'}
+              </Text>
             </View>
-          )}
+            {totalCartQty > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{totalCartQty}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Restaurant vs. store */}
+          <View style={styles.filterRow}>
+            <TouchableOpacity
+              style={[styles.filterPill, businessFilter === 'restaurant' && styles.filterPillOn]}
+              onPress={() => selectBusinessFilter('restaurant')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="restaurant-outline" size={15} color={businessFilter === 'restaurant' ? colors.primary : colors.white} />
+              <Text style={[styles.filterPillText, businessFilter === 'restaurant' && styles.filterPillTextOn]}>Restaurants</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, businessFilter === 'store' && styles.filterPillOn]}
+              onPress={() => selectBusinessFilter('store')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="storefront-outline" size={15} color={businessFilter === 'store' ? colors.primary : colors.white} />
+              <Text style={[styles.filterPillText, businessFilter === 'store' && styles.filterPillTextOn]}>Stores</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.centerText, { color: subText }]}>Loading nearby restaurants...</Text>
+            <Text style={[styles.centerText, { color: subText }]}>
+              {businessFilter === 'store' ? 'Loading nearby stores...' : 'Loading nearby restaurants...'}
+            </Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -652,16 +691,27 @@ export default function FoodScreen({ navigation }) {
                 style={[styles.searchInput, { color: textColor }]}
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Search restaurant or cuisine"
+                placeholder={businessFilter === 'store' ? 'Search store or category' : 'Search restaurant or cuisine'}
                 placeholderTextColor={subText}
               />
             </View>
 
-            {/* Firestore restaurant badge legend */}
+            {/* Firestore listing badge legend */}
             {firestoreRestaurants.length > 0 && (
               <View style={styles.legendRow}>
                 <View style={styles.verifiedDot} />
-                <Text style={[styles.legendText, { color: subText }]}>Green dot = verified Tiyende restaurant with real menu</Text>
+                <Text style={[styles.legendText, { color: subText }]}>
+                  Green dot = verified Tiyende {businessFilter === 'store' ? 'store' : 'restaurant'} with real {businessFilter === 'store' ? 'catalog' : 'menu'}
+                </Text>
+              </View>
+            )}
+
+            {restaurants.length === 0 && (
+              <View style={styles.emptyBusinessRow}>
+                <Ionicons name={businessFilter === 'store' ? 'storefront-outline' : 'restaurant-outline'} size={30} color={subText} />
+                <Text style={[styles.emptyBusinessText, { color: subText }]}>
+                  {businessFilter === 'store' ? 'No stores listed yet — check back soon.' : 'No restaurants found nearby.'}
+                </Text>
               </View>
             )}
 
@@ -681,10 +731,15 @@ export default function FoodScreen({ navigation }) {
                     activeOpacity={0.85}
                   >
                     {item.source === 'firestore' && <View style={styles.verifiedBadge} />}
+                    {item.businessType === 'store' && (
+                      <View style={styles.storeBadge}>
+                        <Ionicons name="storefront" size={10} color={colors.white} />
+                      </View>
+                    )}
                     <RestaurantLogo restaurant={item} />
                     <Text style={[styles.restaurantName, { color: textColor }]} numberOfLines={2}>{item.name}</Text>
                     <Text style={[styles.restaurantMeta, { color: subText }]} numberOfLines={1}>
-                      {(item.cuisine || item.cuisineType || 'Restaurant').replace(/;/g, ', ')}
+                      {(item.cuisine || item.cuisineType || (item.businessType === 'store' ? 'Store' : 'Restaurant')).replace(/;/g, ', ')}
                     </Text>
                     <Text style={styles.restaurantDistance}>{formatDistance(item.distanceKm)}</Text>
                     {item.openHours ? <Text style={[styles.restaurantHours, { color: subText }]} numberOfLines={1}>{item.openHours}</Text> : null}
@@ -820,7 +875,7 @@ export default function FoodScreen({ navigation }) {
                       <Ionicons name="ticket-outline" size={14} color={subText} />
                       <TextInput
                         style={[styles.promoInput, { color: textColor }]}
-                        placeholder={isFirestoreRestaurant ? 'Enter restaurant promo code' : 'e.g. FOOD20 (20% off)'}
+                        placeholder={isFirestoreRestaurant ? `Enter ${selectedRestaurant?.businessType === 'store' ? 'store' : 'restaurant'} promo code` : 'e.g. FOOD20 (20% off)'}
                         placeholderTextColor={subText}
                         value={promoCode}
                         onChangeText={(v) => { setPromoCode(v); setRestaurantDiscount(null); }}
@@ -950,15 +1005,26 @@ export default function FoodScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
     backgroundColor: colors.primary,
-    paddingTop: 56, paddingBottom: 22, paddingHorizontal: 20,
+    paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
   },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
   backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: colors.white },
   headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   cartBadge:   { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   cartBadgeText: { fontSize: 14, fontWeight: '900', color: colors.textPrimary },
+  filterRow: { flexDirection: 'row', gap: 10 },
+  filterPill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: radius.full, paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
+  },
+  filterPillOn: { backgroundColor: colors.white, borderColor: colors.white },
+  filterPillText: { fontSize: 13, fontWeight: '800', color: colors.white },
+  filterPillTextOn: { color: colors.primary },
+  emptyBusinessRow: { alignItems: 'center', gap: 8, paddingVertical: 28 },
+  emptyBusinessText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
 
   content: { padding: 16, paddingBottom: 48 },
   center:  { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
@@ -974,6 +1040,7 @@ const styles = StyleSheet.create({
   restaurantList: { gap: 10, paddingBottom: 16 },
   restaurantCard: { width: 148, borderWidth: 1.5, borderRadius: radius.lg, padding: 12, ...shadows.xs, position: 'relative' },
   verifiedBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
+  storeBadge: { position: 'absolute', top: 8, left: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: '#0EA5E9', alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   logoFallback: { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   logoText:     { color: colors.white, fontWeight: '800', fontSize: 15 },
   restaurantName:     { fontSize: 13, fontWeight: '800', marginTop: 9, minHeight: 34 },

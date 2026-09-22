@@ -7,19 +7,24 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, radius, shadows } from '../../theme';
+import useRestaurantProfile from '../../hooks/useRestaurantProfile';
 import { addMenuItem, updateMenuItem } from '../../services/restaurantService';
 
-const CATEGORIES = ['Burgers', 'Pizza', 'Chicken', 'Mains', 'Sides', 'Snacks', 'Drinks', 'Hot Drinks', 'Cold Drinks', 'Desserts', 'Salads', 'Other'];
+const FOOD_CATEGORIES  = ['Burgers', 'Pizza', 'Chicken', 'Mains', 'Sides', 'Snacks', 'Drinks', 'Hot Drinks', 'Cold Drinks', 'Desserts', 'Salads', 'Other'];
+const STORE_CATEGORIES = ['Groceries', 'Electronics', 'Clothing', 'Home & Hardware', 'Health & Beauty', 'Stationery', 'Toys & Baby', 'Other'];
 
 export default function AddMenuItemScreen({ navigation, route }) {
   const { restaurantId, item: editItem } = route.params || {};
   const isEdit = Boolean(editItem);
+  const { isStore } = useRestaurantProfile();
+  const CATEGORIES = isStore ? STORE_CATEGORIES : FOOD_CATEGORIES;
 
   const [name, setName]             = useState(editItem?.name || '');
   const [category, setCategory]     = useState(editItem?.category || '');
   const [price, setPrice]           = useState(editItem?.price?.toString() || '');
   const [description, setDesc]      = useState(editItem?.description || '');
   const [discountPct, setDiscount]  = useState(editItem?.discountPercent?.toString() || '0');
+  const [stockQty, setStockQty]     = useState(editItem?.stockQty != null ? String(editItem.stockQty) : '');
   const [imageBase64, setImage]     = useState(editItem?.imageBase64 || '');
   const [saving, setSaving]         = useState(false);
 
@@ -56,6 +61,7 @@ export default function AddMenuItemScreen({ navigation, route }) {
         price: parsedPrice,
         description: description.trim(),
         discountPercent: Math.max(0, Math.min(99, Number(discountPct) || 0)),
+        stockQty: stockQty.trim() ? Math.max(0, Math.round(Number(stockQty))) : null,
         imageBase64: imageBase64 || null,
       };
       if (isEdit) {
@@ -80,8 +86,8 @@ export default function AddMenuItemScreen({ navigation, route }) {
             <Ionicons name="arrow-back" size={20} color={colors.white} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.headerSub}>{isEdit ? 'Edit Item' : 'New Menu Item'}</Text>
-            <Text style={styles.headerTitle}>{isEdit ? editItem.name : 'Add to your menu'}</Text>
+            <Text style={styles.headerSub}>{isEdit ? 'Edit Item' : 'New Item'}</Text>
+            <Text style={styles.headerTitle}>{isEdit ? editItem.name : (isStore ? 'Add to your catalog' : 'Add to your menu')}</Text>
           </View>
         </View>
 
@@ -161,6 +167,17 @@ export default function AddMenuItemScreen({ navigation, route }) {
             ) : null}
           </View>
 
+          {/* Stock quantity */}
+          <Label text="STOCK QUANTITY (OPTIONAL)" />
+          <TextInput
+            style={styles.input}
+            value={stockQty}
+            onChangeText={(v) => setStockQty(v.replace(/[^0-9]/g, ''))}
+            placeholder={isStore ? 'e.g. 12' : 'Leave blank if not tracked'}
+            placeholderTextColor={colors.textTertiary}
+            keyboardType="number-pad"
+          />
+
           {/* Description */}
           <Label text="DESCRIPTION" />
           <TextInput
@@ -180,7 +197,7 @@ export default function AddMenuItemScreen({ navigation, route }) {
             {saving
               ? <ActivityIndicator color={colors.white} />
               : <Ionicons name="checkmark-circle-outline" size={20} color={colors.white} />}
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add to Menu'}</Text>
+            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : (isStore ? 'Add to Catalog' : 'Add to Menu')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>

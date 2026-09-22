@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { colors, radius, shadows } from '../../theme';
 import { useAppContext } from '../../context/AppContext';
-import { watchRestaurantProfile, watchRestaurantOrders } from '../../services/restaurantService';
+import { watchRestaurantProfile, watchRestaurantOrders, updateRestaurantProfile } from '../../services/restaurantService';
 import { updateRequestStatus } from '../../services/requestService';
 
 const STAGE_FLOW = ['pending_restaurant', 'restaurant_confirmed', 'preparing', 'ready_for_pickup'];
@@ -198,6 +198,7 @@ export default function RestaurantDashboard({ navigation }) {
   const cardBg    = darkMode ? '#161B22' : colors.white;
   const textColor = darkMode ? colors.textOnDark : colors.textPrimary;
   const subText   = darkMode ? '#8B949E' : colors.textSecondary;
+  const isStore   = restaurant?.businessType === 'store';
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
@@ -207,14 +208,13 @@ export default function RestaurantDashboard({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>Restaurant Dashboard</Text>
+            <Text style={styles.greeting}>{isStore ? 'Store Dashboard' : 'Restaurant Dashboard'}</Text>
             <Text style={styles.restaurantName} numberOfLines={1}>{restaurant?.name || 'Loading…'}</Text>
           </View>
           <TouchableOpacity
             style={[styles.openBadge, { backgroundColor: restaurant?.isOpen ? '#1A7F37' : colors.error }]}
             onPress={async () => {
               if (!uid || !restaurant) return;
-              const { updateRestaurantProfile } = require('../../services/restaurantService');
               await updateRestaurantProfile(uid, { isOpen: !restaurant.isOpen });
             }}
           >

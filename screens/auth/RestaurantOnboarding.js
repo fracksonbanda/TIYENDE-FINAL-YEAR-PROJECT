@@ -21,8 +21,24 @@ const CUISINE_OPTIONS = [
   { id: 'other',    label: 'Other',                icon: 'restaurant-outline' },
 ];
 
+const STORE_CATEGORIES = [
+  { id: 'grocery',      label: 'Groceries & Foodstuffs', icon: 'basket-outline' },
+  { id: 'electronics',  label: 'Electronics & Gadgets',  icon: 'phone-portrait-outline' },
+  { id: 'fashion',      label: 'Clothing & Fashion',     icon: 'shirt-outline' },
+  { id: 'hardware',     label: 'Hardware & Home',        icon: 'hammer-outline' },
+  { id: 'pharmacy',     label: 'Pharmacy & Health',      icon: 'medkit-outline' },
+  { id: 'beauty',       label: 'Beauty & Cosmetics',     icon: 'sparkles-outline' },
+  { id: 'other',        label: 'Other',                  icon: 'storefront-outline' },
+];
+
+const BUSINESS_TYPES = [
+  { id: 'restaurant', label: 'Restaurant', icon: 'restaurant-outline', sub: 'Food & drink' },
+  { id: 'store',      label: 'Store',      icon: 'storefront-outline', sub: 'Goods & products' },
+];
+
 export default function RestaurantOnboarding({ navigation }) {
   const [step, setStep]               = useState(1); // 1 = basics, 2 = details
+  const [businessType, setBusinessType] = useState('restaurant'); // 'restaurant' | 'store'
   const [name, setName]               = useState('');
   const [address, setAddress]         = useState('');
   const [phone, setPhone]             = useState('');
@@ -32,6 +48,8 @@ export default function RestaurantOnboarding({ navigation }) {
   const [logoBase64, setLogoBase64]   = useState('');
   const [submitting, setSubmitting]   = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const isStore = businessType === 'store';
+  const CATEGORY_OPTIONS = isStore ? STORE_CATEGORIES : CUISINE_OPTIONS;
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }).start();
@@ -58,10 +76,10 @@ export default function RestaurantOnboarding({ navigation }) {
 
   const handleBack = () => {
     if (step === 2) { fadeAnim.setValue(0); setStep(1); return; }
-    // Leaving step 1 means abandoning restaurant signup — reset the role so
+    // Leaving step 1 means abandoning business signup — reset the role so
     // the user lands back on role selection instead of being stuck here
     // (App.js routes straight to this screen whenever role is 'restaurant_pending').
-    Alert.alert('Cancel Restaurant Signup?', 'You can choose a different account type instead.', [
+    Alert.alert('Cancel Business Signup?', 'You can choose a different account type instead.', [
       { text: 'Stay', style: 'cancel' },
       {
         text: 'Cancel Signup',
@@ -78,9 +96,9 @@ export default function RestaurantOnboarding({ navigation }) {
   };
 
   const goNext = () => {
-    if (!name.trim()) { Alert.alert('Restaurant name required'); return; }
+    if (!name.trim()) { Alert.alert(isStore ? 'Store name required' : 'Restaurant name required'); return; }
     if (!address.trim()) { Alert.alert('Address required'); return; }
-    if (!cuisineType) { Alert.alert('Select a cuisine type'); return; }
+    if (!cuisineType) { Alert.alert(isStore ? 'Select a store category' : 'Select a cuisine type'); return; }
     fadeAnim.setValue(0);
     setStep(2);
   };
@@ -91,6 +109,7 @@ export default function RestaurantOnboarding({ navigation }) {
       const user = auth.currentUser;
       if (!user) throw new Error('Session expired — please sign in again.');
       await createRestaurantProfile({
+        businessType,
         name: name.trim(),
         address: address.trim(),
         phone: phone.trim(),
@@ -116,8 +135,8 @@ export default function RestaurantOnboarding({ navigation }) {
             <Ionicons name="arrow-back" size={20} color={colors.white} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.stepLabel}>STEP {step} OF 2  ·  RESTAURANT SETUP</Text>
-            <Text style={styles.headerTitle}>{step === 1 ? 'Your restaurant' : 'More details'}</Text>
+            <Text style={styles.stepLabel}>STEP {step} OF 2  ·  {isStore ? 'STORE SETUP' : 'RESTAURANT SETUP'}</Text>
+            <Text style={styles.headerTitle}>{step === 1 ? (isStore ? 'Your store' : 'Your restaurant') : 'More details'}</Text>
           </View>
         </View>
 
@@ -128,6 +147,23 @@ export default function RestaurantOnboarding({ navigation }) {
         >
           {step === 1 ? (
             <>
+              {/* Business type */}
+              <Text style={styles.sectionLabel}>WHAT ARE YOU SETTING UP? *</Text>
+              <View style={styles.typeRow}>
+                {BUSINESS_TYPES.map((t) => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.typeCard, businessType === t.id && styles.typeCardOn]}
+                    onPress={() => { setBusinessType(t.id); setCuisineType(''); }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name={t.icon} size={22} color={businessType === t.id ? colors.white : colors.primary} />
+                    <Text style={[styles.typeCardLabel, businessType === t.id && { color: colors.white }]}>{t.label}</Text>
+                    <Text style={[styles.typeCardSub, businessType === t.id && { color: 'rgba(255,255,255,0.8)' }]}>{t.sub}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {/* Logo picker */}
               <TouchableOpacity style={styles.logoPicker} onPress={pickLogo}>
                 {logoBase64 ? (
@@ -140,12 +176,12 @@ export default function RestaurantOnboarding({ navigation }) {
                 )}
               </TouchableOpacity>
 
-              <Field label="RESTAURANT NAME *" icon="restaurant-outline">
+              <Field label={isStore ? 'STORE NAME *' : 'RESTAURANT NAME *'} icon={isStore ? 'storefront-outline' : 'restaurant-outline'}>
                 <TextInput
                   style={styles.input}
                   value={name}
                   onChangeText={setName}
-                  placeholder="e.g. Chicken Inn Manda Hill"
+                  placeholder={isStore ? 'e.g. Chanda Electronics' : 'e.g. Chicken Inn Manda Hill'}
                   placeholderTextColor={colors.textTertiary}
                   autoCapitalize="words"
                 />
@@ -172,9 +208,9 @@ export default function RestaurantOnboarding({ navigation }) {
                 />
               </Field>
 
-              <Text style={styles.sectionLabel}>CUISINE TYPE *</Text>
+              <Text style={styles.sectionLabel}>{isStore ? 'STORE CATEGORY *' : 'CUISINE TYPE *'}</Text>
               <View style={styles.cuisineGrid}>
-                {CUISINE_OPTIONS.map((opt) => (
+                {CATEGORY_OPTIONS.map((opt) => (
                   <TouchableOpacity
                     key={opt.id}
                     style={[styles.cuisineChip, cuisineType === opt.id && styles.cuisineChipOn]}
@@ -203,12 +239,12 @@ export default function RestaurantOnboarding({ navigation }) {
                 />
               </Field>
 
-              <Field label="ABOUT YOUR RESTAURANT" icon="information-circle-outline">
+              <Field label={isStore ? 'ABOUT YOUR STORE' : 'ABOUT YOUR RESTAURANT'} icon="information-circle-outline">
                 <TextInput
                   style={[styles.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 }]}
                   value={description}
                   onChangeText={setDescription}
-                  placeholder="Tell customers what makes your food special..."
+                  placeholder={isStore ? "Tell customers what you sell..." : "Tell customers what makes your food special..."}
                   placeholderTextColor={colors.textTertiary}
                   multiline
                 />
@@ -217,7 +253,9 @@ export default function RestaurantOnboarding({ navigation }) {
               <View style={styles.infoCard}>
                 <Ionicons name="information-circle" size={18} color={colors.info} />
                 <Text style={styles.infoText}>
-                  After setup you can add your full menu with photos, prices, and categories from your restaurant dashboard.
+                  {isStore
+                    ? 'After setup you can add your full catalog with photos, prices, and stock levels from your dashboard.'
+                    : 'After setup you can add your full menu with photos, prices, and categories from your restaurant dashboard.'}
                 </Text>
               </View>
 
@@ -229,7 +267,7 @@ export default function RestaurantOnboarding({ navigation }) {
                 {submitting
                   ? <ActivityIndicator color={colors.white} />
                   : <Ionicons name="checkmark-circle-outline" size={20} color={colors.white} />}
-                <Text style={styles.nextBtnText}>{submitting ? 'Creating your restaurant…' : 'Open for business!'}</Text>
+                <Text style={styles.nextBtnText}>{submitting ? 'Creating your business…' : 'Open for business!'}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -273,6 +311,15 @@ const styles = StyleSheet.create({
   logoPlaceholderText: { fontSize: 11, fontWeight: '700', color: colors.primary, marginTop: 4 },
 
   sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.4, color: colors.textTertiary, marginBottom: 8 },
+
+  typeRow: { flexDirection: 'row', gap: 12, marginBottom: 22 },
+  typeCard: {
+    flex: 1, alignItems: 'center', gap: 4, borderRadius: radius.lg, padding: 16,
+    borderWidth: 2, borderColor: colors.border, backgroundColor: colors.offWhite,
+  },
+  typeCardOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  typeCardLabel: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 4 },
+  typeCardSub: { fontSize: 11, color: colors.textTertiary, fontWeight: '600' },
   fieldWrap: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.white, borderRadius: radius.md,

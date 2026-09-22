@@ -11,6 +11,7 @@ import RestaurantProfileScreen from '../screens/restaurant/RestaurantProfileScre
 import RestaurantChatScreen   from '../screens/shared/RestaurantChatScreen';
 import { colors, shadows } from '../theme';
 import { useAppContext } from '../context/AppContext';
+import useRestaurantProfile from '../hooks/useRestaurantProfile';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -22,8 +23,11 @@ const RESTAURANT_TABS = [
   { name: 'Profile',   icon: 'person-circle',      iconOut: 'person-circle-outline',     label: 'Profile' },
 ];
 
+const STORE_TAB_OVERRIDE = { icon: 'storefront', iconOut: 'storefront-outline', label: 'Catalog' };
+
 function RestaurantTabBar({ state, descriptors, navigation }) {
   const { darkMode } = useAppContext();
+  const { isStore } = useRestaurantProfile();
   const bg     = darkMode ? colors.darkCard   : colors.white;
   const border = darkMode ? colors.darkBorder : colors.borderLight;
 
@@ -31,7 +35,8 @@ function RestaurantTabBar({ state, descriptors, navigation }) {
     <View style={[styles.tabBar, { backgroundColor: bg, borderTopColor: border }]}>
       {state.routes.map((route, index) => {
         const focused = state.index === index;
-        const item    = RESTAURANT_TABS.find((t) => t.name === route.name) || RESTAURANT_TABS[0];
+        const baseItem = RESTAURANT_TABS.find((t) => t.name === route.name) || RESTAURANT_TABS[0];
+        const item = (isStore && baseItem.name === 'Menu') ? { ...baseItem, ...STORE_TAB_OVERRIDE } : baseItem;
         const color   = focused ? colors.primary : (darkMode ? colors.textTertiary : '#9CA3AF');
 
         return (

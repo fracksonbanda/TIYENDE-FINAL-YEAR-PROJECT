@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../firebase';
 import { colors, radius, shadows } from '../../theme';
 import { useAppContext } from '../../context/AppContext';
+import useRestaurantProfile from '../../hooks/useRestaurantProfile';
 import { watchMenuItems, deleteMenuItem, updateMenuItem } from '../../services/restaurantService';
 
 function ItemImage({ item, size = 54 }) {
@@ -28,6 +29,7 @@ const CUISINE_COLORS = {
 
 export default function MenuScreen({ navigation }) {
   const { darkMode } = useAppContext();
+  const { isStore } = useRestaurantProfile();
   const [items, setItems] = useState([]);
   const uid = auth.currentUser?.uid;
 
@@ -91,6 +93,13 @@ export default function MenuScreen({ navigation }) {
           {item.discountPercent > 0 && (
             <Text style={styles.itemPriceDiscounted}>ZK {Math.round(item.price * (1 - item.discountPercent / 100))}</Text>
           )}
+          {item.stockQty != null && (
+            <View style={[styles.stockChip, item.stockQty === 0 && styles.stockChipOut]}>
+              <Text style={[styles.stockChipText, item.stockQty === 0 && styles.stockChipTextOut]}>
+                {item.stockQty === 0 ? 'Out of stock' : `${item.stockQty} in stock`}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
       <View style={styles.itemActions}>
@@ -116,7 +125,7 @@ export default function MenuScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor={colors.charcoal} />
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerSub}>Your Menu</Text>
+          <Text style={styles.headerSub}>{isStore ? 'Your Catalog' : 'Your Menu'}</Text>
           <Text style={styles.headerTitle}>{items.length} item{items.length !== 1 ? 's' : ''}</Text>
         </View>
         <TouchableOpacity
@@ -130,9 +139,9 @@ export default function MenuScreen({ navigation }) {
 
       {grouped.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="restaurant-outline" size={52} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: textColor }]}>Your menu is empty</Text>
-          <Text style={[styles.emptySub, { color: subText }]}>Add your first menu item so customers can start ordering.</Text>
+          <Ionicons name={isStore ? 'storefront-outline' : 'restaurant-outline'} size={52} color={colors.border} />
+          <Text style={[styles.emptyTitle, { color: textColor }]}>{isStore ? 'Your catalog is empty' : 'Your menu is empty'}</Text>
+          <Text style={[styles.emptySub, { color: subText }]}>{isStore ? 'Add your first product so customers can start ordering.' : 'Add your first menu item so customers can start ordering.'}</Text>
           <TouchableOpacity style={styles.emptyAddBtn} onPress={() => navigation.navigate('AddMenuItem', { restaurantId: uid })}>
             <Ionicons name="add-circle-outline" size={18} color={colors.white} />
             <Text style={styles.emptyAddBtnText}>Add First Item</Text>
@@ -186,6 +195,10 @@ const styles = StyleSheet.create({
   itemFooter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemPrice: { fontSize: 14, fontWeight: '900', color: colors.primary },
   itemPriceDiscounted: { fontSize: 12, fontWeight: '900', color: colors.success },
+  stockChip: { backgroundColor: colors.primaryGhost, borderRadius: radius.full, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 2 },
+  stockChipOut: { backgroundColor: colors.errorLight },
+  stockChipText: { fontSize: 9.5, fontWeight: '800', color: colors.primary },
+  stockChipTextOut: { color: colors.error },
   itemActions: { alignItems: 'center', gap: 6 },
   editBtn: { padding: 6, backgroundColor: colors.primaryGhost, borderRadius: radius.sm },
   deleteBtn: { padding: 6, backgroundColor: colors.errorLight, borderRadius: radius.sm },
