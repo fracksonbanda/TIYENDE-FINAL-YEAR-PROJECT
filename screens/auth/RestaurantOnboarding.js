@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { auth } from '../../firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase';
 import { createRestaurantProfile } from '../../services/restaurantService';
 import { colors, shadows, radius } from '../../theme';
 
@@ -37,18 +38,43 @@ export default function RestaurantOnboarding({ navigation }) {
   }, [step]);
 
   const pickLogo = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Allow access to your photos to pick a logo.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.4,
-      base64: true,
-    });
-    if (!result.canceled && result.assets[0]?.base64) {
-      setLogoBase64(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission needed', 'Allow access to your photos to pick a logo.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.4,
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]?.base64) {
+        setLogoBase64(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      }
+    } catch (error) {
+      Alert.alert('Logo Upload Failed', `${error.message}\n\nYou can add a logo later from your restaurant profile.`);
     }
+  };
+
+  const handleBack = () => {
+    if (step === 2) { fadeAnim.setValue(0); setStep(1); return; }
+    // Leaving step 1 means abandoning restaurant signup — reset the role so
+    // the user lands back on role selection instead of being stuck here
+    // (App.js routes straight to this screen whenever role is 'restaurant_pending').
+    Alert.alert('Cancel Restaurant Signup?', 'You can choose a different account type instead.', [
+      { text: 'Stay', style: 'cancel' },
+      {
+        text: 'Cancel Signup',
+        style: 'destructive',
+        onPress: async () => {
+          const user = auth.currentUser;
+          if (user) {
+            try { await setDoc(doc(db, 'users', user.uid), { role: 'new' }, { merge: true }); } catch {}
+          }
+          navigation.navigate('OnboardingSelector');
+        },
+      },
+    ]);
   };
 
   const goNext = () => {
@@ -86,11 +112,9 @@ export default function RestaurantOnboarding({ navigation }) {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
-          {step === 2 && (
-            <TouchableOpacity onPress={() => { fadeAnim.setValue(0); setStep(1); }} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={20} color={colors.white} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color={colors.white} />
+          </TouchableOpacity>
           <View>
             <Text style={styles.stepLabel}>STEP {step} OF 2  ·  RESTAURANT SETUP</Text>
             <Text style={styles.headerTitle}>{step === 1 ? 'Your restaurant' : 'More details'}</Text>

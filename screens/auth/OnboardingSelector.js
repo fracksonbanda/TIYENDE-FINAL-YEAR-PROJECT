@@ -12,11 +12,13 @@ import { colors, shadows, radius } from '../../theme';
 
 export default function OnboardingSelector({ navigation }) {
   const [fullName, setFullName]         = useState('');
+  const [phone, setPhone]               = useState('');
   const [photoUri, setPhotoUri]         = useState('');
   const [loading, setLoading]           = useState(false);
   const [loadingRole, setLoadingRole]   = useState(null); // 'passenger' | 'driver' | 'restaurant'
   const [pickingImage, setPickingImage] = useState(false);
   const [nameFocused, setNameFocused]   = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -35,6 +37,7 @@ export default function OnboardingSelector({ navigation }) {
         const data = snap.data();
         const name = data.fullName || data.identifier || data.displayName || '';
         if (name) setFullName(name);
+        if (data.phone) setPhone(data.phone);
       }
       setProfileLoaded(true);
     }).catch(() => {
@@ -79,8 +82,13 @@ export default function OnboardingSelector({ navigation }) {
 
   const selectRole = async (roleId) => {
     const cleanName = fullName.trim();
+    const cleanPhone = phone.trim();
     if (!cleanName) {
       Alert.alert('Name Required', 'Please enter your full name before continuing.');
+      return;
+    }
+    if (!cleanPhone) {
+      Alert.alert('Phone Number Required', 'Please enter a phone number so drivers and passengers can reach you.');
       return;
     }
 
@@ -91,13 +99,14 @@ export default function OnboardingSelector({ navigation }) {
       const user = auth.currentUser;
       if (!user) throw new Error('Session expired. Please go back and sign in again.');
 
-      /* 1 — Write role + name to Firestore */
+      /* 1 — Write role + name + phone to Firestore */
       const firestoreRole = roleId === 'driver' ? 'driver_pending'
         : roleId === 'restaurant' ? 'restaurant_pending'
         : 'passenger';
       await setDoc(doc(db, 'users', user.uid), {
         role: firestoreRole,
         fullName: cleanName,
+        phone: cleanPhone,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
 
@@ -225,10 +234,35 @@ export default function OnboardingSelector({ navigation }) {
                   autoCapitalize="words"
                   onFocus={() => setNameFocused(true)}
                   onBlur={() => setNameFocused(false)}
-                  returnKeyType="done"
+                  returnKeyType="next"
                 />
               </View>
             )}
+          </View>
+        </Animated.View>
+
+        {/* Phone card */}
+        <Animated.View style={[styles.phoneCard, { opacity: fadeAnim }]}>
+          <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
+          <Text style={styles.phoneHint}>Shown to your driver or passenger once a trip is booked.</Text>
+          <View style={[styles.inputWrap, phoneFocused && styles.inputWrapFocused]}>
+            <Ionicons
+              name="call-outline"
+              size={15}
+              color={phoneFocused ? colors.primary : colors.textTertiary}
+              style={{ marginLeft: 12 }}
+            />
+            <TextInput
+              style={styles.nameInput}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="+260 97 1234567"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="phone-pad"
+              onFocus={() => setPhoneFocused(true)}
+              onBlur={() => setPhoneFocused(false)}
+              returnKeyType="done"
+            />
           </View>
         </Animated.View>
 
@@ -325,6 +359,12 @@ const styles = StyleSheet.create({
     marginBottom: 16, ...shadows.small,
   },
   nameField:  { flex: 1 },
+  phoneCard: {
+    backgroundColor: colors.white, borderRadius: radius.xl,
+    padding: 14, borderWidth: 1, borderColor: colors.borderLight,
+    marginBottom: 16, ...shadows.small,
+  },
+  phoneHint:  { fontSize: 11, color: colors.textTertiary, marginBottom: 8, marginTop: -3 },
   fieldLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, color: colors.textTertiary, marginBottom: 7 },
   inputWrap:  {
     flexDirection: 'row', alignItems: 'center',

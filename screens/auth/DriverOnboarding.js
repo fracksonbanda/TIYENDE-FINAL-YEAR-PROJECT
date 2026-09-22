@@ -17,6 +17,7 @@ export default function DriverOnboarding({ navigation }) {
   const { profile } = useUserProfile();
   const [step, setStep] = useState(1);
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [photoUri, setPhotoUri] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleType, setVehicleType] = useState('');
@@ -29,7 +30,8 @@ export default function DriverOnboarding({ navigation }) {
 
   useEffect(() => {
     if (profile?.fullName && !fullName) setFullName(profile.fullName);
-  }, [profile?.fullName]);
+    if (profile?.phone && !phone) setPhone(profile.phone);
+  }, [profile?.fullName, profile?.phone]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -52,6 +54,10 @@ export default function DriverOnboarding({ navigation }) {
       Alert.alert('Required', 'Please enter your full name.');
       return;
     }
+    if (!phone.trim()) {
+      Alert.alert('Required', 'Please enter a phone number so passengers can reach you.');
+      return;
+    }
     fadeAnim.setValue(0);
     setStep(2);
     Animated.parallel([
@@ -71,14 +77,22 @@ export default function DriverOnboarding({ navigation }) {
       const user = auth.currentUser;
       if (!user) throw new Error('You need to sign in first.');
 
+      // A photo-upload failure must never strand the account mid-registration —
+      // vehicle details are already validated, so complete the signup regardless
+      // and let the driver retry the photo later from Settings if it failed.
       let photoURL = '';
       if (photoUri) {
-        photoURL = await uploadProfileImage(photoUri);
+        try {
+          photoURL = await uploadProfileImage(photoUri);
+        } catch (photoError) {
+          Alert.alert('Photo Upload Failed', `${photoError.message}\n\nContinuing without a photo — you can add one later from Settings.`);
+        }
       }
 
       await setDoc(doc(db, 'users', user.uid), {
         role: 'driver',
         fullName: fullName.trim(),
+        phone: phone.trim(),
         vehicleModel: vehicleModel.trim(),
         vehicleType,
         licensePlate: licensePlate.trim().toUpperCase(),
@@ -99,12 +113,33 @@ export default function DriverOnboarding({ navigation }) {
 
   const photoPreview = photoUri || profile?.photoURL || '';
 
+  const handleBack = () => {
+    if (step === 2) { setStep(1); return; }
+    // Leaving step 1 means abandoning driver signup — reset the role so the
+    // user lands back on role selection instead of being stuck here forever
+    // (App.js routes straight to this screen whenever role is 'driver_pending').
+    Alert.alert('Cancel Driver Signup?', 'You can choose a different account type instead.', [
+      { text: 'Stay', style: 'cancel' },
+      {
+        text: 'Cancel Signup',
+        style: 'destructive',
+        onPress: async () => {
+          const user = auth.currentUser;
+          if (user) {
+            try { await setDoc(doc(db, 'users', user.uid), { role: 'new' }, { merge: true }); } catch {}
+          }
+          navigation.navigate('OnboardingSelector');
+        },
+      },
+    ]);
+  };
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => (step === 1 ? navigation.goBack() : setStep(1))}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
           <Ionicons name="arrow-back" size={22} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Driver Registration</Text>
@@ -147,6 +182,22 @@ export default function DriverOnboarding({ navigation }) {
                     onChangeText={setFullName}
                     placeholderTextColor={colors.textTertiary}
                     autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
+                <Text style={styles.fieldHint}>Shown to passengers once you accept their request.</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="+260 97 1234567"
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="phone-pad"
                   />
                 </View>
               </View>
@@ -257,6 +308,7 @@ const styles = StyleSheet.create({
   stepSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 28 },
   fieldGroup: { marginBottom: 20 },
   fieldLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: colors.textTertiary, marginBottom: 8 },
+  fieldHint: { fontSize: 11, color: colors.textTertiary, marginTop: -4, marginBottom: 8 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md,

@@ -428,6 +428,13 @@ export default function DriverDashboard({ navigation }) {
                 <View style={styles.ratingRow}>
                   <Ionicons name="star" size={12} color={colors.accent} />
                   <Text style={styles.passengerRating}>{activeRequest.passengerRating || 5}</Text>
+                  {activeRequest.passengerPhone && (
+                    <>
+                      <Text style={[styles.passengerRating, { color: subText }]}>  ·  </Text>
+                      <Ionicons name="call-outline" size={11} color={subText} />
+                      <Text style={[styles.passengerRating, { color: subText }]}> {activeRequest.passengerPhone}</Text>
+                    </>
+                  )}
                 </View>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
@@ -457,6 +464,14 @@ export default function DriverDashboard({ navigation }) {
             ) : null}
 
             <View style={styles.contactActions}>
+              {activeRequest.passengerPhone && (
+                <TouchableOpacity style={styles.iconActionBtn} onPress={() => Linking.openURL(`tel:${activeRequest.passengerPhone}`)}>
+                  <View style={[styles.iconActionCircle, { backgroundColor: 'rgba(26,127,55,0.14)' }]}>
+                    <Ionicons name="call" size={18} color={colors.primaryLight} />
+                  </View>
+                  <Text style={[styles.iconActionText, { color: subText }]}>Call</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={styles.iconActionBtn} onPress={openNavigation}>
                 <View style={[styles.iconActionCircle, { backgroundColor: 'rgba(14,165,233,0.14)' }]}>
                   <Ionicons name="navigate" size={18} color="#0EA5E9" />

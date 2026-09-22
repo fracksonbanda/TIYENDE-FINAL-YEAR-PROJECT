@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { updateProfile } from 'firebase/auth';
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { auth, db, storage } from '../firebase';
 
 export function watchUserProfile(uid, onChange, onError) {
@@ -66,7 +66,10 @@ export async function uploadProfileImage(uri) {
     throw new Error('Could not read the selected photo. Please try picking it again.');
   }
   const imageRef = ref(storage, `profilePhotos/${user.uid}/${Date.now()}.jpg`);
-  await uploadBytes(imageRef, bytes, { contentType: 'image/jpeg' });
+  // uploadBytes() builds its request body by merging the binary data with text
+  // boundary strings via new Blob([...]) — React Native's Blob rejects that
+  // combination. The resumable path sends the raw bytes with no such merge.
+  await uploadBytesResumable(imageRef, bytes, { contentType: 'image/jpeg' });
   const photoURL = await getDownloadURL(imageRef);
 
   await saveUserProfile({ photoURL });

@@ -945,9 +945,21 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.ratingRow}>
                   <Ionicons name="star" size={11} color={colors.accent} />
                   <Text style={[styles.ratingText, { color: subText }]}>{activeRequest.driverRating || '5.0'}</Text>
+                  {activeRequest.driverPhone && (
+                    <>
+                      <Text style={[styles.ratingText, { color: subText }]}>  ·  </Text>
+                      <Ionicons name="call-outline" size={11} color={subText} />
+                      <Text style={[styles.ratingText, { color: subText }]}> {activeRequest.driverPhone}</Text>
+                    </>
+                  )}
                 </View>
               </View>
               <View style={styles.driverActions}>
+                {activeRequest.driverPhone && (
+                  <TouchableOpacity style={[styles.driverAction, { backgroundColor: colors.primaryGhost }]} onPress={() => Linking.openURL(`tel:${activeRequest.driverPhone}`)}>
+                    <Ionicons name="call-outline" size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={[styles.driverAction, { backgroundColor: colors.primaryGhost }]} onPress={() => navigation.navigate('TripChat', { request: activeRequest })}>
                   <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
                 </TouchableOpacity>
