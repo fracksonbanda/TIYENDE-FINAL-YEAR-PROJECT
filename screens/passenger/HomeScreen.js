@@ -46,7 +46,7 @@ const PAYMENT_METHODS = [
 
 const SERVICE_CARDS = [
   { id: 'Ride',     label: 'Ride',     sub: 'Book a car',   icon: 'car-sport-outline',  accent: colors.primary },
-  { id: 'Food',     label: 'Food',     sub: 'Order meals',  icon: 'fast-food-outline',  accent: '#FF6B6B' },
+  { id: 'Food',     label: 'Services', sub: 'Shops & restaurants', icon: 'storefront-outline', accent: '#FF6B6B' },
   { id: 'Delivery', label: 'Delivery', sub: 'Send parcels', icon: 'bicycle-outline',    accent: '#0EA5E9' },
   { id: 'Cargo',    label: 'Cargo',    sub: 'Move items',   icon: 'cube-outline',       accent: '#F59E0B' },
 ];

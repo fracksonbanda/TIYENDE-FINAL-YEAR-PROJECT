@@ -21,11 +21,20 @@ export default function DriverOnboarding({ navigation }) {
   const [photoUri, setPhotoUri] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleType, setVehicleType] = useState('');
+  const [vehicleColor, setVehicleColor] = useState('');
+  const [vehicleYear, setVehicleYear] = useState('');
   const [licensePlate, setLicensePlate] = useState('');
+  const [driverLicenseNumber, setDriverLicenseNumber] = useState('');
+  const [chassisNumber, setChassisNumber] = useState('');
+  const [engineNumber, setEngineNumber] = useState('');
+  const [insuranceNumber, setInsuranceNumber] = useState('');
+  const [insuranceExpiry, setInsuranceExpiry] = useState('');
+  const [fitnessCertNumber, setFitnessCertNumber] = useState('');
+  const [fitnessCertExpiry, setFitnessCertExpiry] = useState('');
   const [loading, setLoading] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
 
-  const progressAnim = useRef(new Animated.Value(0.5)).current;
+  const progressAnim = useRef(new Animated.Value(1 / 3)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -61,14 +70,27 @@ export default function DriverOnboarding({ navigation }) {
     fadeAnim.setValue(0);
     setStep(2);
     Animated.parallel([
+      Animated.timing(progressAnim, { toValue: 2 / 3, duration: 400, useNativeDriver: false }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const goStep3 = () => {
+    if (!vehicleModel.trim() || !licensePlate.trim() || !vehicleType || !vehicleColor.trim() || !vehicleYear.trim()) {
+      Alert.alert('Required Fields', 'Please complete all vehicle details.');
+      return;
+    }
+    fadeAnim.setValue(0);
+    setStep(3);
+    Animated.parallel([
       Animated.timing(progressAnim, { toValue: 1, duration: 400, useNativeDriver: false }),
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
     ]).start();
   };
 
   const handleRegister = async () => {
-    if (!vehicleModel.trim() || !licensePlate.trim() || !vehicleType) {
-      Alert.alert('Required Fields', 'Please complete all vehicle details.');
+    if (!driverLicenseNumber.trim() || !chassisNumber.trim() || !insuranceNumber.trim() || !insuranceExpiry.trim() || !fitnessCertNumber.trim() || !fitnessCertExpiry.trim()) {
+      Alert.alert('Required Fields', 'Please complete all RTSA registration details.');
       return;
     }
 
@@ -95,7 +117,16 @@ export default function DriverOnboarding({ navigation }) {
         phone: phone.trim(),
         vehicleModel: vehicleModel.trim(),
         vehicleType,
+        vehicleColor: vehicleColor.trim(),
+        vehicleYear: vehicleYear.trim(),
         licensePlate: licensePlate.trim().toUpperCase(),
+        driverLicenseNumber: driverLicenseNumber.trim().toUpperCase(),
+        chassisNumber: chassisNumber.trim().toUpperCase(),
+        engineNumber: engineNumber.trim().toUpperCase(),
+        insuranceNumber: insuranceNumber.trim().toUpperCase(),
+        insuranceExpiry: insuranceExpiry.trim(),
+        fitnessCertNumber: fitnessCertNumber.trim().toUpperCase(),
+        fitnessCertExpiry: fitnessCertExpiry.trim(),
         status: 'active',
         driverOnline: false,
         rating: profile?.rating || 5,
@@ -114,6 +145,7 @@ export default function DriverOnboarding({ navigation }) {
   const photoPreview = photoUri || profile?.photoURL || '';
 
   const handleBack = () => {
+    if (step === 3) { setStep(2); return; }
     if (step === 2) { setStep(1); return; }
     // Leaving step 1 means abandoning driver signup — reset the role so the
     // user lands back on role selection instead of being stuck here forever
@@ -143,11 +175,11 @@ export default function DriverOnboarding({ navigation }) {
           <Ionicons name="arrow-back" size={22} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Driver Registration</Text>
-        <Text style={styles.stepText}>Step {step} of 2</Text>
+        <Text style={styles.stepText}>Step {step} of 3</Text>
 
         <View style={styles.progressTrack}>
           <Animated.View style={[styles.progressFill, {
-            width: progressAnim.interpolate({ inputRange: [0.5, 1], outputRange: ['50%', '100%'] }),
+            width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
           }]} />
         </View>
       </View>
@@ -207,7 +239,7 @@ export default function DriverOnboarding({ navigation }) {
                 <Ionicons name="arrow-forward" size={18} color={colors.white} />
               </TouchableOpacity>
             </>
-          ) : (
+          ) : step === 2 ? (
             <>
               <View style={styles.stepIcon}>
                 <Ionicons name="car-outline" size={30} color={colors.primary} />
@@ -231,17 +263,49 @@ export default function DriverOnboarding({ navigation }) {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>VEHICLE MODEL</Text>
+                <Text style={styles.fieldLabel}>MAKE & MODEL</Text>
                 <View style={styles.inputWrapper}>
                   <Ionicons name="car-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. Toyota Corolla 2019"
+                    placeholder="e.g. Toyota Corolla"
                     value={vehicleModel}
                     onChangeText={setVehicleModel}
                     placeholderTextColor={colors.textTertiary}
                     autoCapitalize="words"
                   />
+                </View>
+              </View>
+
+              <View style={styles.rowGroup}>
+                <View style={[styles.fieldGroup, { flex: 1 }]}>
+                  <Text style={styles.fieldLabel}>YEAR OF MANUFACTURE</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 2019"
+                      value={vehicleYear}
+                      onChangeText={setVehicleYear}
+                      placeholderTextColor={colors.textTertiary}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                    />
+                  </View>
+                </View>
+                <View style={[styles.fieldGroup, { flex: 1 }]}>
+                  <Text style={styles.fieldLabel}>COLOR</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="color-palette-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. White"
+                      value={vehicleColor}
+                      onChangeText={setVehicleColor}
+                      placeholderTextColor={colors.textTertiary}
+                      autoCapitalize="words"
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -256,6 +320,125 @@ export default function DriverOnboarding({ navigation }) {
                     onChangeText={setLicensePlate}
                     placeholderTextColor={colors.textTertiary}
                     autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={goStep3} activeOpacity={0.85}>
+                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color={colors.white} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.stepIcon}>
+                <Ionicons name="document-text-outline" size={30} color={colors.primary} />
+              </View>
+              <Text style={styles.stepHeading}>RTSA Registration</Text>
+              <Text style={styles.stepSub}>Required by the Road Transport and Safety Agency to operate as a commercial driver.</Text>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>DRIVER'S LICENSE NUMBER</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="card-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 123456/78/1"
+                    value={driverLicenseNumber}
+                    onChangeText={setDriverLicenseNumber}
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>CHASSIS / VIN NUMBER</Text>
+                <Text style={styles.fieldHint}>From your Certificate of Registration (Blue Book).</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="barcode-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. JT2BF22K1V0123456"
+                    value={chassisNumber}
+                    onChangeText={setChassisNumber}
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>ENGINE NUMBER (OPTIONAL)</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="cog-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 2AZ1234567"
+                    value={engineNumber}
+                    onChangeText={setEngineNumber}
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>INSURANCE CERTIFICATE NUMBER</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="shield-checkmark-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. INS-0012345"
+                    value={insuranceNumber}
+                    onChangeText={setInsuranceNumber}
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>INSURANCE EXPIRY DATE</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="DD/MM/YYYY"
+                    value={insuranceExpiry}
+                    onChangeText={setInsuranceExpiry}
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="numbers-and-punctuation"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>ROAD TAX / FITNESS CERTIFICATE NUMBER</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="checkmark-done-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. COF-0012345"
+                    value={fitnessCertNumber}
+                    onChangeText={setFitnessCertNumber}
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>FITNESS CERTIFICATE EXPIRY DATE</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="DD/MM/YYYY"
+                    value={fitnessCertExpiry}
+                    onChangeText={setFitnessCertExpiry}
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType="numbers-and-punctuation"
                   />
                 </View>
               </View>
@@ -307,6 +490,7 @@ const styles = StyleSheet.create({
   stepHeading: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
   stepSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 28 },
   fieldGroup: { marginBottom: 20 },
+  rowGroup: { flexDirection: 'row', gap: 12 },
   fieldLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: colors.textTertiary, marginBottom: 8 },
   fieldHint: { fontSize: 11, color: colors.textTertiary, marginTop: -4, marginBottom: 8 },
   inputWrapper: {
