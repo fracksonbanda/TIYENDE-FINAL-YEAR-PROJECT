@@ -42,3 +42,26 @@ workflows:
           zip -qry "$APP_NAME-unsigned.ipa" Payload
     artifacts:
       - build/ipa/*.ipa
+
+  android-debug-apk:
+    name: Tiyende Android (debug .apk, no signing needed)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      node: 20.19.4
+      java: 17
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/.gradle/caches
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Generate the native Android project (Expo prebuild)
+        script: npx expo prebuild --platform android --no-install
+      - name: Build a debug APK (Gradle signs it automatically with its own debug keystore)
+        script: |
+          cd android
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk

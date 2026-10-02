@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   Animated, StatusBar, Alert, Modal, ActivityIndicator, Image, Linking, Platform,
 } from 'react-native';
-import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
+import LeafletMap from '../../components/LeafletMap';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, setDoc } from 'firebase/firestore';
 import { ref as dbRef, remove as dbRemove, set as dbSet } from 'firebase/database';
@@ -63,6 +63,15 @@ function serviceIcon(type) {
     delivery: 'bicycle-outline',
     cargo: 'cube-outline',
   }[type] || 'navigate-outline';
+}
+
+function serviceEmoji(type) {
+  return {
+    ride: '🚗',
+    food: '🍔',
+    delivery: '🚲',
+    cargo: '📦',
+  }[type] || '📍';
 }
 
 function serviceLabel(type) {
@@ -352,16 +361,15 @@ export default function DriverDashboard({ navigation }) {
 
       {activeRequest && (
         <View style={styles.mapContainer}>
-          <MapView style={styles.map} region={mapRegion} mapType="none">
-            <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
-            <Marker coordinate={activeRequest.pickupCoords || DEFAULT_PICKUP.coords} title={activeRequest.pickupName}>
-              <View style={styles.pickupMarker}><Ionicons name={serviceIcon(activeRequest.serviceType)} size={16} color={colors.white} /></View>
-            </Marker>
-            <Marker coordinate={activeRequest.destinationCoords || DEFAULT_PICKUP.coords} title={activeRequest.destinationName}>
-              <Ionicons name="location" size={30} color={colors.error} />
-            </Marker>
-            <Polyline coordinates={routeCoords} strokeColor={colors.primary} strokeWidth={4} lineDashPattern={[10, 5]} />
-          </MapView>
+          <LeafletMap
+            style={styles.map}
+            region={mapRegion}
+            markers={[
+              { id: 'pickup', type: 'badge', color: colors.primary, emoji: serviceEmoji(activeRequest.serviceType), coordinate: activeRequest.pickupCoords || DEFAULT_PICKUP.coords },
+              { id: 'dest', type: 'pin', coordinate: activeRequest.destinationCoords || DEFAULT_PICKUP.coords },
+            ]}
+            polyline={{ coordinates: routeCoords, color: colors.primary }}
+          />
           <View style={styles.navBanner}>
             <Ionicons name="navigate" size={18} color={colors.white} />
             <Text style={styles.navBannerText}>{statusLabel(activeRequest.status, activeRequest.serviceType)}</Text>

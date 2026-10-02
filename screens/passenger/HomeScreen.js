@@ -4,7 +4,7 @@ import {
   Animated, StatusBar, KeyboardAvoidingView, Platform, ScrollView,
   Dimensions, Alert, ActivityIndicator, Image, Linking, Modal,
 } from 'react-native';
-import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
+import LeafletMap from '../../components/LeafletMap';
 import { Ionicons } from '@expo/vector-icons';
 import * as SMS from 'expo-sms';
 import * as Location from 'expo-location';
@@ -597,20 +597,15 @@ export default function HomeScreen({ navigation }) {
         <StatusBar barStyle="light-content" />
 
         {/* Map fills the top */}
-        <MapView style={styles.map} region={mapRegion} mapType="none" showsUserLocation={false}>
-          <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
-          <Marker coordinate={pickup.coords}>
-            <View style={styles.myDot}><View style={styles.myDotInner} /></View>
-          </Marker>
-          {routeTarget && (
-            <>
-              <Marker coordinate={routeTarget}>
-                <View style={styles.destPin}><Ionicons name="location" size={30} color={colors.error} /></View>
-              </Marker>
-              <Polyline coordinates={routeCoords} strokeColor={colors.primary} strokeWidth={4} lineDashPattern={[8, 4]} />
-            </>
-          )}
-        </MapView>
+        <LeafletMap
+          style={styles.map}
+          region={mapRegion}
+          markers={[
+            { id: 'me', type: 'dot', coordinate: pickup.coords },
+            ...(routeTarget ? [{ id: 'dest', type: 'pin', coordinate: routeTarget }] : []),
+          ]}
+          polyline={routeTarget ? { coordinates: routeCoords, color: colors.primary } : null}
+        />
 
         {/* Back button */}
         <TouchableOpacity
@@ -858,35 +853,16 @@ export default function HomeScreen({ navigation }) {
         <StatusBar barStyle="light-content" />
 
         {/* Map — larger in tracking mode */}
-        <MapView
+        <LeafletMap
           style={styles.trackingMap}
           region={mapRegion}
-          mapType="none"
-          showsUserLocation={false}
-        >
-          <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
-          <Marker coordinate={pickup.coords}>
-            <View style={styles.myDot}><View style={styles.myDotInner} /></View>
-          </Marker>
-          {driverLiveLocation && (
-            <Marker coordinate={driverLiveLocation}>
-              <View style={styles.driverMarker}><Ionicons name="car-sport" size={16} color={colors.white} /></View>
-            </Marker>
-          )}
-          {activeRequest.destinationCoords && (
-            <>
-              <Marker coordinate={activeRequest.destinationCoords}>
-                <View style={styles.destPin}><Ionicons name="location" size={30} color={colors.error} /></View>
-              </Marker>
-              <Polyline
-                coordinates={[pickup.coords, activeRequest.destinationCoords]}
-                strokeColor={colors.primary}
-                strokeWidth={4}
-                lineDashPattern={[8, 4]}
-              />
-            </>
-          )}
-        </MapView>
+          markers={[
+            { id: 'me', type: 'dot', coordinate: pickup.coords },
+            ...(driverLiveLocation ? [{ id: 'driver', type: 'badge', color: colors.primary, emoji: '🚗', coordinate: driverLiveLocation }] : []),
+            ...(activeRequest.destinationCoords ? [{ id: 'dest', type: 'pin', coordinate: activeRequest.destinationCoords }] : []),
+          ]}
+          polyline={activeRequest.destinationCoords ? { coordinates: [pickup.coords, activeRequest.destinationCoords], color: colors.primary } : null}
+        />
 
         {/* ETA overlay chip on map */}
         <View style={[styles.trackingEtaChip, { backgroundColor: inProgress ? colors.primary : cardBg }]}>

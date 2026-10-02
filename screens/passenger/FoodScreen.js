@@ -4,7 +4,7 @@ import {
   FlatList, ActivityIndicator, Alert, Image, ScrollView,
   KeyboardAvoidingView, Platform, Animated,
 } from 'react-native';
-import MapView, { Marker, UrlTile, Polyline } from 'react-native-maps';
+import LeafletMap from '../../components/LeafletMap';
 import { Ionicons } from '@expo/vector-icons';
 import { onValue, ref as dbRef } from 'firebase/database';
 import { onSnapshot, doc } from 'firebase/firestore';
@@ -513,7 +513,7 @@ export default function FoodScreen({ navigation }) {
           {/* Mini map (shown once driver is assigned) */}
           {driverCoord && (
             <View style={styles.miniMapWrap}>
-              <MapView
+              <LeafletMap
                 style={styles.miniMap}
                 region={{
                   latitude: driverCoord.latitude,
@@ -521,28 +521,14 @@ export default function FoodScreen({ navigation }) {
                   latitudeDelta: 0.03,
                   longitudeDelta: 0.03,
                 }}
-                mapType="none"
                 scrollEnabled={false}
                 zoomEnabled={false}
-              >
-                <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
-                {/* Restaurant */}
-                <Marker coordinate={orderTracking.restaurantCoords} title={orderTracking.restaurantName}>
-                  <View style={styles.restaurantMarker}>
-                    <Ionicons name="restaurant" size={13} color={colors.white} />
-                  </View>
-                </Marker>
-                {/* Delivery address */}
-                <Marker coordinate={orderTracking.deliveryCoords} title="Delivery">
-                  <Ionicons name="location" size={28} color={colors.error} />
-                </Marker>
-                {/* Driver */}
-                <Marker coordinate={driverCoord} title={liveOrder?.driverName || 'Courier'}>
-                  <View style={styles.driverMarker}>
-                    <Ionicons name="bicycle" size={14} color={colors.white} />
-                  </View>
-                </Marker>
-              </MapView>
+                markers={[
+                  { id: 'restaurant', type: 'badge', color: colors.primary, emoji: '🍴', coordinate: orderTracking.restaurantCoords },
+                  { id: 'delivery', type: 'pin', coordinate: orderTracking.deliveryCoords },
+                  { id: 'driver', type: 'badge', color: colors.primary, emoji: '🚲', coordinate: driverCoord },
+                ]}
+              />
               <View style={styles.mapLabel}>
                 <Ionicons name="bicycle-outline" size={13} color={colors.primary} />
                 <Text style={[styles.mapLabelText, { color: textColor }]}>
